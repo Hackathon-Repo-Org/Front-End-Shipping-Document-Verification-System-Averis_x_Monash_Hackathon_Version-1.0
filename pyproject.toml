@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shipdoc"
+version = "0.6.0"
+description = "Batch verification of shipping instructions against draft bills of lading"
+requires-python = ">=3.12"
+
+# CORE — everything needed to read the corpus, extract from every format in it,
+# compare, and write a submission. All pure-Python wheels: no compiler, no system
+# binary, no model download. This is what a teammate gets from `pip install -e .`
+# and it is enough to run the whole pipeline.
+dependencies = [
+    "pyyaml>=6.0",
+    "rapidfuzz>=3.0",
+    "openpyxl>=3.1",
+    "python-docx>=1.0",
+    "pymupdf>=1.24",
+]
+
+[project.optional-dependencies]
+# OCR for the three scanned PDFs. ALSO needs the `tesseract` binary on PATH, which
+# pip cannot install — see SETUP.md tier 2. Without it those records are NEEDS_REVIEW,
+# which is the correct answer, not a failure.
+ocr = ["pytesseract>=0.3", "pillow>=10.0"]
+
+# The LLM classifier talks HTTP to a local Ollama server using nothing but stdlib,
+# so this extra is empty by design. It exists so `pip install -e ".[llm]"` is a
+# valid, documented command rather than an error. Ollama itself is a separate
+# install — SETUP.md tier 3.
+llm = []
+
+dev = ["pytest>=8.0"]
+all = ["shipdoc[ocr,llm,dev]"]
+
+[project.scripts]
+shipdoc = "shipdoc.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+shipdoc = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# BACKUP holds superseded modules. If pytest ever collected from there, a stale
+# duplicate would shadow a real one and the failure would be baffling.
+norecursedirs = ["BACKUP", "dataset", "output", "docs", "tools", "eval", ".*", "*.egg-info"]
+pythonpath = ["src", "tests"]
+
+[tool.coverage.run]
+source = ["src/shipdoc"]
+omit = ["*/__pycache__/*", "BACKUP/*", "tools/*", "eval/*"]

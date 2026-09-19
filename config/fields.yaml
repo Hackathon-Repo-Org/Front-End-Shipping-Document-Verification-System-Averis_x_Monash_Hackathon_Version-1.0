@@ -1,0 +1,101 @@
+# Field registry — the seven compared fields as DATA.
+#
+# Field names are the attested spellings from README.md (spec Open Item 1, CLOSED).
+# Synonyms are harvested from the 64 distinct labels observed across the 192 .txt
+# attachments, NOT invented — `To the Order of:` (x37) and
+# `Consignee (Non-Negotiable):` (x52) are the reason M09 insists on harvesting.
+#
+# Synonyms are declared LONGEST FIRST (M09: matching `Port of Loading:` before
+# `Port of Loading (POL):` leaves `(POL):` stranded in the value).
+#
+# Per-field `threshold` / `grey_low` are deliberately absent: patch §3 moves the
+# two threshold pairs into pipeline.yaml and `address_bearing` selects between them.
+
+comparison_category: BL_COMPARISON
+
+sentinels: ['^n/?a$', '^tba$', '^tbd$', '^nil$', '^-+$', '^_+$', '^$']
+
+fields:
+  shipper:
+    type: text
+    required: true
+    address_bearing: true
+    synonyms:
+      - "Shipper (Principal or Seller):"
+      - "Shipper/Exporter:"
+      - "Exporter:"
+      - "SHIPPER:"
+      - "Shipper:"
+
+  consignee:
+    type: text
+    required: true
+    address_bearing: true
+    synonyms:
+      - "Consignee (Non-Negotiable):"
+      - "To the Order of:"
+      - "CONSIGNEE:"
+      - "Consignee:"
+
+  notify_party:
+    type: text
+    required: true
+    address_bearing: true
+    synonyms:
+      - "Notify Party/Intermediate Consignee:"
+      - "NOTIFY PARTY:"
+      - "Notify Party:"
+      - "Notify:"
+
+  port_of_loading:
+    type: port
+    required: true
+    synonyms:
+      - "Port of Loading (POL):"
+      - "PORT OF LOADING:"
+      - "Port of Loading:"
+      - "Load Port:"
+      - "POL:"
+
+  port_of_discharge:
+    type: port
+    required: true
+    synonyms:
+      - "Port of Discharge (POD):"
+      - "PORT OF DISCHARGE:"
+      - "Port of Discharge:"
+      - "Discharge Port:"
+      - "POD:"
+
+  container_count:
+    type: integer
+    required: true
+    extract: '(\d+)\s*x\s*\d+'
+    synonyms:
+      - "No. of Containers or Packages:"
+      - "No. of Containers:"
+      - "Total Containers:"
+      - "Container Count:"
+
+  gross_weight_kg:
+    type: quantity
+    required: true
+    unit: kg
+    conversions:
+      MT: 1000
+      T: 1000
+      MTS: 1000
+      LBS: 0.45359237
+    # M09 P-NET: longest-match points the WRONG way here. `NET WEIGHT` (x5) and
+    # `GROSS WEIGHT` (x45) both contain "WEIGHT", and email_516_SI.txt carries both
+    # — gross is `N/A`, net is `_______ MTS`. A negative list, not just longest-match.
+    anti_synonyms:
+      - "NET WEIGHT:"
+      - "NETT WEIGHT:"
+      - "Net Weight:"
+      - "Net Wt:"
+    synonyms:
+      - "Gross Weight (KG):"
+      - "Gross Weight(KGS):"   # CJK-stripped form of `Gross Weight毛重(KGS):` — M09 P-CJK
+      - "Gross Wt (kgs):"
+      - "GROSS WEIGHT:"
