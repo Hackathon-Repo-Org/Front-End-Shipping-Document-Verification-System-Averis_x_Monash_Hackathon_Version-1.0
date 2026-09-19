@@ -212,7 +212,7 @@ def main() -> int:
     for reason, n in by_reason.most_common():
         print(f"      {n:4d}  {reason}")
 
-    print("\nQ4  port resolution ON vs OFF — see BACKUP/2026-09-19/phase5/NOTES.md.")
+    print("\nQ4  port resolution ON vs OFF — see docs/decisions/port-resolution.md.")
     print("      Bucket counts (measured): A=13 gains, B=3 gains, C=14 ALL HARMFUL,")
     print("      plus 18 MATCH->CANNOT_DETERMINE losses. Net 15 real detections")
     print("      destroyed. Flag stays OFF; no second scoring run spent on it.")

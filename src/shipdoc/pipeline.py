@@ -270,17 +270,31 @@ def write_atomic(path: Path, payload: object) -> None:
         raise
 
 
-def build_llm(cfg: Config, out_dir: Path):
+LLM_CACHE_DIR = Path("cache") / "llm"
+
+
+def build_llm(cfg: Config, out_dir: Path, cache_dir: Path | None = None):
     """Construct the cached client, probing once so degraded mode is entered a single
-    time rather than 394 times. Returns None when the model is unreachable."""
+    time rather than 394 times.
+
+    Returns a CachedLLM whenever the cache exists, even with no model reachable: a
+    warm cache answers every prompt this corpus asks, so a clone with no Ollama still
+    reproduces the published run. Returns None only when there is neither.
+    """
     from shipdoc.infra.cache import Cache
     from shipdoc.llm.client import CachedLLM, OllamaClient, probe
 
+    root = Path(cache_dir) if cache_dir else LLM_CACHE_DIR
     inner = OllamaClient(cfg.llm.model, temperature=cfg.llm.temperature,
                          seed=cfg.llm.seed)
-    client = CachedLLM(inner, Cache(Path(out_dir) / "cache" / "llm"),
-                       prompt_version=cfg.llm.prompt_version)
-    return client if probe(inner, timeout_s=min(cfg.llm.timeout_s, 15.0)) else None
+    client = CachedLLM(inner, Cache(root), prompt_version=cfg.llm.prompt_version,
+                       model=cfg.llm.model)
+
+    if probe(inner, timeout_s=min(cfg.llm.timeout_s, 15.0)):
+        return client
+    # No server. If the cache has entries they are this model's own answers at
+    # temperature 0, so they are exactly what the server would have returned.
+    return client if root.is_dir() and any(root.rglob("*")) else None
 
 
 def main_run(source: str, config_dir: str, out_dir: str,
@@ -314,6 +328,12 @@ def main_run(source: str, config_dir: str, out_dir: str,
     write_queue(result["records"], queue_path, preserve=prior)
     result["summary"]["decisions_applied"] = len(decisions)
     write_atomic(out / "run_summary.json", result["summary"])
+
+    try:
+        from shipdoc.llm.client import write_manifest
+        write_manifest(LLM_CACHE_DIR, cfg.llm.model, cfg.llm.prompt_version)
+    except Exception:
+        pass                      # a manifest must never fail a run
 
     report = ReportAdapter().emit(result["records"])
     out.mkdir(parents=True, exist_ok=True)

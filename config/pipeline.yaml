@@ -41,7 +41,7 @@ flags:
   # Patch 02 §5 A/B. true = an SI/BL attachment pair decides the category outright.
   structural_decisive: true
   # Phase 5 UN/LOCODE port resolution. OFF pending measurement — see
-  # BACKUP/2026-09-19/phase5/NOTES.md. Flip to true to turn it back on.
+  # docs/decisions/port-resolution.md. Flip to true to turn it back on.
   port_resolution_enabled: false
 
 reference:

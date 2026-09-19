@@ -1,0 +1,6 @@
+{
+  "model": "qwen2.5:7b-instruct",
+  "prompt_version": "v1",
+  "entries": 379,
+  "note": "Answers produced by this system's own classifier at temperature 0. Keys are sha256(model + prompt_version + prompt); values are one of the five category strings. No email text and no gold labels are stored. Clear with: rm -rf cache/llm  then re-run with Ollama."
+}

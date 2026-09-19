@@ -47,7 +47,7 @@ Add `--fast` to skip the test-suite check (about 5 seconds instead).
 python -m pytest -q
 ```
 
-**Expected:** `522 passed` in about 30 seconds. Zero failures is the thing that
+**Expected:** `553 passed` in about 50 seconds. Zero failures is the thing that
 matters; the count rises as tests are added.
 
 | Directory | What it covers |
@@ -55,7 +55,7 @@ matters; the count rises as tests are added.
 | `tests/unit/` | one module at a time — classification, extraction, sentinels, label matching, port resolution, the review queue |
 | `tests/property/` | contracts and invariants that must hold for *every* input: the extractor never raises, state transitions are monotone, the layering rule, and that the answer key cannot leak into the pipeline |
 | `tests/integration/` | the whole corpus end to end — 520 records, submission schema, CLI behaviour |
-| `tests/golden/` | reserved for named-record regressions; those currently live in `tests/unit/test_stage4_compare.py` |
+| `tests/golden/` | the 20 planted edge cases, each asserted by name — all 20 pass |
 
 Run one group: `python -m pytest tests/property -q`
 
@@ -155,11 +155,11 @@ table for the 20 planted edge cases, and four named questions. It also writes
 As of this handoff:
 
 ```
-  stage1 macro-F1     0.9549   (weight 0.30)
-  stage3 defect-F1    0.9565   (weight 0.20)
-  end-to-end          0.7609   (weight 0.50)   35/46
-  reliability         esc-P 0.120 esc-R 0.650  (weight 0.00)
-  FINAL SCORE         0.8582
+  stage1 macro-F1     0.9526   (weight 0.30)
+  stage3 defect-F1    0.9890   (weight 0.20)   precision 1.000
+  end-to-end          0.9348   (weight 0.50)   43/46
+  reliability         esc-P 0.408 esc-R 1.000  (weight 0.00)
+  FINAL SCORE         0.9510
 ```
 
 **The evaluator is a measuring instrument, never an input.** No module under
@@ -217,7 +217,7 @@ does not.
   defect detections** to gain 14, because this corpus plants port defects as a
   name/code contradiction and the resolver lets a stale code override a differing
   name. The fix direction is written up in
-  `BACKUP/2026-09-19/phase5/NOTES.md` under "Fix direction (not implemented)".
+  `docs/decisions/port-resolution.md` under "Fix direction (not implemented)".
   Do not flip the flag without implementing both rules there and re-running
   `tools/bucket_analysis.py`.
 

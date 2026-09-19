@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9517.** Suite 553 passed, 0 failed. Output deterministic. The next work —
+**Score 0.9510.** Suite 553 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
@@ -12,16 +12,16 @@ Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
 
 | Axis | Weight | Value |
 |---|---|---|
-| stage-1 macro-F1 (category) | 0.30 | 0.9549 · accuracy 0.9538 |
+| stage-1 macro-F1 (category) | 0.30 | 0.9526 · accuracy 0.9500 |
 | stage-3 defect-F1 | 0.20 | **0.9890** · precision **1.000**, recall 0.978 |
 | end-to-end | 0.50 | **0.9348** — 43/46 defect emails caught exactly |
 | reliability (unscored) | 0.00 | escalation P 0.408, R **1.000** |
-| **final** | | **0.9517** |
+| **final** | | **0.9510** |
 
 Planted edge cases **20/20**. Review queue **55** entries (was 125).
 
 ```
-submission.json   5e47a136ffaa70f34e3dbe708eae2293b57d52c89dc011e3287046d5f69f96bd
+submission.json   c02b4f44e6fdda4fc7c72efa40aaca6d73052ebf32254574617ad5b42c8a9b64
 run_summary.json  3b11f6241a5f8458d606aa8b19d04b94c576db665c1086e86198b1203878d794
 ```
 
@@ -32,7 +32,7 @@ bundle at `../sdoc-server/`). The evaluator writes `eval/report.txt`.
 
 ## What changed today
 
-Progression: **0.8582 → 0.9517**.
+Progression: **0.8582 → 0.9510**.
 
 | Change | Effect |
 |---|---|
@@ -46,7 +46,7 @@ Progression: **0.8582 → 0.9517**.
 
 - **Removing row 2's `suspected` append** — tried, **reverted**, cost 5 end-to-end
   points. On 10 records `defects ∪ suspected` equals gold exactly. The finding that
-  motivated it was a bad query. Evidence: `BACKUP/2026-09-20/PROJECTION_NOTES.md`.
+  motivated it was a bad query. Evidence: `docs/decisions/projection-rows.md`.
 - **Restricting row 3** — cancelled before implementation. The split showed 6 records,
   5 gains, 1 false positive, all under `err_no_value`; the restriction named
   `missing_value` and would have cost all 5.
@@ -68,7 +68,7 @@ Progression: **0.8582 → 0.9517**.
   false`. Measured net harmful as built — destroys 15 real detections to gain 14,
   because this corpus plants port defects as a name/code contradiction and the
   resolver lets a stale code override a differing name. Do not flip it without
-  implementing both rules in `BACKUP/2026-09-19/phase5/NOTES.md` → "Fix direction"
+  implementing both rules in `docs/decisions/port-resolution.md` → "Fix direction"
   and re-running `tools/bucket_analysis.py`.
 - **`tests/golden/` holds only the edge cases.** Other golden cases still live inside
   `tests/unit/test_stage4_compare.py`. Cosmetic; splitting test files is the one
@@ -96,3 +96,21 @@ Progression: **0.8582 → 0.9517**.
   directions.
 - **Nothing is deleted.** `.backup-exempt` lists the regenerable patterns; everything
   else goes to `BACKUP/<date>/` with a MANIFEST entry.
+
+---
+
+## A note on the published number: 0.9517 vs 0.9510
+
+An earlier run of this system scored **0.9517**. Rebuilding the LLM cache from scratch
+— same model, same prompt, temperature 0 — produced **0.9510**. The difference is two
+emails classified differently on the 0.30 macro-F1 axis (24 → 26 category
+disagreements). **Every other axis is identical**: defect-F1 0.9890, end-to-end 43/46,
+edge cases 20/20.
+
+That is the model being non-deterministic despite temperature 0, which is exactly why
+`cache/llm/` is now committed. The published 0.9510 is the number a fresh clone
+reproduces byte-for-byte, with no Ollama installed. A slightly higher number nobody
+else can reproduce is worth less than a slightly lower one that anyone can.
+
+The pre-rebuild cache is still on disk at `output/cache/llm/` under the old key scheme
+(no model component), unreachable and unused. It was not deleted.

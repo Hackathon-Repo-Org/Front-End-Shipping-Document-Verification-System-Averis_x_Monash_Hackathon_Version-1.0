@@ -138,7 +138,7 @@ def probe(cfg=None, root: Path | None = None, *,
         on = getattr(cfg.flags, "port_resolution_enabled", False)
         caps.append(Capability(
             "port resolution", on,
-            "enabled" if on else "disabled (Phase 5, flag off — see BACKUP notes)",
+            "enabled" if on else "disabled — measured net harmful, see HANDOVER.md",
             remedy="config/pipeline.yaml -> flags.port_resolution_enabled: true"))
 
     return caps

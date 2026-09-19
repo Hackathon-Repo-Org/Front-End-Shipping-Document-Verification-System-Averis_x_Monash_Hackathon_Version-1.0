@@ -21,11 +21,11 @@ rather than reimplemented.
 
 | Axis | Weight | Score |
 |---|---|---|
-| Stage 1 — email classification (macro-F1) | 0.30 | 0.9549 |
+| Stage 1 — email classification (macro-F1) | 0.30 | 0.9526 |
 | Stage 3 — defect detection (F1) | 0.20 | 0.9890 · precision **1.000** |
 | End-to-end — defects caught exactly | 0.50 | 0.9348 — **43/46** |
 | Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** |
-| **Final** | | **0.9517** |
+| **Final** | | **0.9510** |
 
 All **20/20** planted edge cases correct. 553 tests pass. Two runs produce
 byte-identical output.
@@ -56,6 +56,29 @@ python -m shipdoc inspect email_013    # one record, seven fields, side by side
 python -m pytest -q                    # 553 tests
 ```
 
+## Why the model cache is committed
+
+`cache/llm/` holds this system's **own classifier outputs**, produced at temperature 0.
+Committing it means a fresh clone reproduces the published score in seconds with no
+Ollama installed, and it is what makes runs byte-identical — temperature 0 alone does
+not guarantee that, because batching and GPU reduction order vary between calls.
+
+**It is not the answer key and contains no gold labels.** Each filename is a
+`sha256(model + prompt_version + prompt)` — irreversible, so no email text is stored —
+and each file's entire contents is one of the five category strings this system
+predicted. Nothing in it is derived from the organisers' labels. The model name and
+prompt version are recorded in `cache/llm/MANIFEST.json`, and they are part of every
+cache key, so a cache built by a different model misses and re-queries rather than
+silently returning the wrong answers.
+
+Checkable rather than asserted — clear it and rebuild (needs Ollama and
+`qwen2.5:7b-instruct`, ~15 minutes):
+
+```powershell
+Remove-Item -Recurse -Force cache\llm
+python -m shipdoc                      # re-queries the model, rewrites the cache
+```
+
 ## Documentation
 
 | File | For |
@@ -65,6 +88,7 @@ python -m pytest -q                    # 553 tests
 | **[HANDOVER.md](HANDOVER.md)** | Current state, what changed, what is known broken. |
 | **[docs/spec/](docs/spec/)** | The architecture specification and its patches. |
 | **[docs/reports/](docs/reports/)** | Corpus survey, scoring-rubric analysis. |
+| **[docs/decisions/](docs/decisions/)** | Why port resolution is off, and why projection rows 2 and 3 were kept — both measured. |
 
 ## Not built yet
 

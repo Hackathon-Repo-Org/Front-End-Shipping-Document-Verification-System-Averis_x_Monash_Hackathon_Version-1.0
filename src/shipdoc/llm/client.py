@@ -68,16 +68,22 @@ class CachedLLM:
     until the cache is cleared by hand.
     """
 
-    def __init__(self, inner: LLMClient, cache: Cache, prompt_version: str):
+    def __init__(self, inner: LLMClient, cache: Cache, prompt_version: str,
+                 model: str = ""):
         self.inner = inner
         self.cache = cache
         self.prompt_version = prompt_version
+        # The MODEL is part of the key. Without it, swapping models silently reuses
+        # the previous model's answers and the change appears to do nothing — the same
+        # failure the prompt-version component was added to prevent.
+        self.model = model or getattr(inner, "model", "")
         self.hits = 0
         self.misses = 0
 
     def complete(self, prompt: str, *, choices: list[str] | None = None,
                  timeout_s: float = 30.0) -> str:
-        key = sha256_text(self.prompt_version, prompt, ",".join(choices or ()))
+        key = sha256_text(self.model, self.prompt_version, prompt,
+                          ",".join(choices or ()))
         cached = self.cache.get(key)
         if cached is not None:
             self.hits += 1
@@ -86,6 +92,32 @@ class CachedLLM:
         value = self.inner.complete(prompt, choices=choices, timeout_s=timeout_s)
         self.cache.put(key, value)
         return value
+
+
+def write_manifest(cache_root, model: str, prompt_version: str) -> None:
+    """Record WHICH model and prompt produced the cached answers.
+
+    The model is already part of every cache key, so a different model simply misses
+    and re-queries rather than silently reusing the wrong answers. This file is the
+    human-readable counterpart: it lets someone looking at a committed cache see what
+    it came from without hashing anything.
+    """
+    import json
+    from pathlib import Path
+
+    root = Path(cache_root)
+    if not root.is_dir():
+        return
+    entries = sum(1 for p in root.rglob("*") if p.is_file() and p.name != "MANIFEST.json")
+    (root / "MANIFEST.json").write_text(json.dumps({
+        "model": model,
+        "prompt_version": prompt_version,
+        "entries": entries,
+        "note": ("Answers produced by this system's own classifier at temperature 0. "
+                 "Keys are sha256(model + prompt_version + prompt); values are one of "
+                 "the five category strings. No email text and no gold labels are "
+                 "stored. Clear with: rm -rf cache/llm  then re-run with Ollama."),
+    }, indent=2) + "\n", encoding="utf-8")
 
 
 def probe(client: LLMClient, timeout_s: float = 10.0) -> bool:

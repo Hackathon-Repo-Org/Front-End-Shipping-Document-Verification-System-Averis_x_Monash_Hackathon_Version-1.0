@@ -1,0 +1,526 @@
+{
+  "buckets": {
+    "A": [
+      {
+        "email_id": "email_005",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE",
+        "bl_raw": "SINGAPORE",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_013",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_034",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_052",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_058",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_167",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_270",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_334",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_335",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_409",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_410",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "PORT KLANG (WESTPORT), MALAYSIA (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_468",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE (SGSIN)",
+        "bl_raw": "RUGAO/NANTONG/SHANGHAI, CHINA (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_520",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "match",
+        "si_raw": "SINGAPORE",
+        "bl_raw": "SINGAPORE (SGSIN)",
+        "detail_on": "SGSIN vs SGSIN (UN/LOCODE)",
+        "detail_off": "no SI reference to compare against"
+      }
+    ],
+    "B": [
+      {
+        "email_id": "email_055",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "mismatch",
+        "si_raw": "SINGAPORE",
+        "bl_raw": null,
+        "detail_on": "SI present, BL absent \u2014 SI is authoritative",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_097",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "mismatch",
+        "si_raw": "SINGAPORE",
+        "bl_raw": null,
+        "detail_on": "SI present, BL absent \u2014 SI is authoritative",
+        "detail_off": "no SI reference to compare against"
+      },
+      {
+        "email_id": "email_435",
+        "field": "port_of_loading",
+        "off": "cannot_determine",
+        "on": "mismatch",
+        "si_raw": "SINGAPORE",
+        "bl_raw": null,
+        "detail_on": "SI present, BL absent \u2014 SI is authoritative",
+        "detail_off": "no SI reference to compare against"
+      }
+    ],
+    "C": [
+      {
+        "email_id": "email_013",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "MOMBASA, KENYA (KEMBA)",
+        "bl_raw": "TUTICORIN, INDIA (KEMBA)",
+        "detail_on": "KEMBA vs KEMBA (UN/LOCODE)",
+        "detail_off": "'MOMBASA' vs 'TUTICORIN', similarity 0.125"
+      },
+      {
+        "email_id": "email_025",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "FREMANTLE, AUSTRALIA (AUFRE)",
+        "bl_raw": "BUSAN, SOUTH KOREA (AUFRE)",
+        "detail_on": "AUFRE vs AUFRE (UN/LOCODE)",
+        "detail_off": "'FREMANTLE' vs 'BUSAN', similarity 0.286"
+      },
+      {
+        "email_id": "email_065",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "HOCHIMINH CITY, VIETNAM (VNSGN)",
+        "bl_raw": "BUSAN, SOUTH KOREA (VNSGN)",
+        "detail_on": "VNSGN vs VNSGN (UN/LOCODE)",
+        "detail_off": "'HOCHIMINH CITY' vs 'BUSAN', similarity 0.105"
+      },
+      {
+        "email_id": "email_071",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "YANGON, MYANMAR (MMRGN)",
+        "bl_raw": "CEBU, PHILIPPINES (MMRGN)",
+        "detail_on": "MMRGN vs MMRGN (UN/LOCODE)",
+        "detail_off": "'YANGON MYANMAR' vs 'CEBU', similarity 0.000"
+      },
+      {
+        "email_id": "email_119",
+        "field": "port_of_loading",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA (MYPKG)",
+        "bl_raw": "SINGAPORE, SINGAPORE (MYPKG)",
+        "detail_on": "MYPKG vs MYPKG (UN/LOCODE)",
+        "detail_off": "'PORT KLANG (WESTPORT)' vs 'SINGAPORE', similarity 0.333"
+      },
+      {
+        "email_id": "email_128",
+        "field": "port_of_loading",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "NHAVA SHEVA, INDIA (INNSA)",
+        "bl_raw": "BUATAN, INDONESIA (INNSA)",
+        "detail_on": "INNSA vs INNSA (UN/LOCODE)",
+        "detail_off": "'NHAVA SHEVA' vs 'BUATAN', similarity 0.235"
+      },
+      {
+        "email_id": "email_129",
+        "field": "port_of_loading",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "NHAVA SHEVA, INDIA (INNSA)",
+        "bl_raw": "BUATAN, INDONESIA (INNSA)",
+        "detail_on": "INNSA vs INNSA (UN/LOCODE)",
+        "detail_off": "'NHAVA SHEVA' vs 'BUATAN', similarity 0.235"
+      },
+      {
+        "email_id": "email_129",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "ASHDOD, ISRAEL (ILASH)",
+        "bl_raw": "TUTICORIN, INDIA (ILASH)",
+        "detail_on": "ILASH vs ILASH (UN/LOCODE)",
+        "detail_off": "'ASHDOD' vs 'TUTICORIN', similarity 0.133"
+      },
+      {
+        "email_id": "email_174",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "CONAKRY, GUINEA (GNCKY)",
+        "bl_raw": "HOCHIMINH CITY, VIETNAM (GNCKY)",
+        "detail_on": "GNCKY vs GNCKY (UN/LOCODE)",
+        "detail_off": "'CONAKRY' vs 'HOCHIMINH CITY', similarity 0.286"
+      },
+      {
+        "email_id": "email_182",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "APAPA, NIGERIA (NGAPP)",
+        "bl_raw": "BALTIMORE, US (NGAPP)",
+        "detail_on": "NGAPP vs NGAPP (UN/LOCODE)",
+        "detail_off": "'APAPA NIGERIA' vs 'BALTIMORE', similarity 0.273"
+      },
+      {
+        "email_id": "email_256",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "VALPARAISO, CHILE (CLVAP)",
+        "bl_raw": "FREMANTLE, AUSTRALIA (CLVAP)",
+        "detail_on": "CLVAP vs CLVAP (UN/LOCODE)",
+        "detail_off": "'VALPARAISO' vs 'FREMANTLE', similarity 0.211"
+      },
+      {
+        "email_id": "email_361",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "BRISBANE, AUSTRALIA (AUBNE)",
+        "bl_raw": "MOMBASA, KENYA (AUBNE)",
+        "detail_on": "AUBNE vs AUBNE (UN/LOCODE)",
+        "detail_off": "'BRISBANE' vs 'MOMBASA', similarity 0.400"
+      },
+      {
+        "email_id": "email_426",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "match",
+        "si_raw": "NEW YORK, US (USNYC)",
+        "bl_raw": "KLAIPEDA, LITHUANIA (USNYC)",
+        "detail_on": "USNYC vs USNYC (UN/LOCODE)",
+        "detail_off": "'NEW YORK' vs 'KLAIPEDA LITHUANIA', similarity 0.154"
+      },
+      {
+        "email_id": "email_519",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "mismatch",
+        "si_raw": "BUATAN, INDONESIA",
+        "bl_raw": "BUATAN, INDONESIA (IDBUA)",
+        "detail_on": "IDBUN vs IDBUA (UN/LOCODE)",
+        "detail_off": "identity BUATAN"
+      }
+    ],
+    "other": [
+      {
+        "email_id": "email_160",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "bl_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity PORT KLANG (WESTPORT)"
+      },
+      {
+        "email_id": "email_160",
+        "field": "port_of_discharge",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "APAPA, NIGERIA",
+        "bl_raw": "APAPA, NIGERIA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity APAPA NIGERIA"
+      },
+      {
+        "email_id": "email_171",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "bl_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity PORT KLANG (WESTPORT)"
+      },
+      {
+        "email_id": "email_171",
+        "field": "port_of_discharge",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "HOUSTON, US",
+        "bl_raw": "HOUSTON, US",
+        "detail_on": "unresolved (SI: ambiguous: 11 codes for this name; BL: ambiguous: 11 codes for this name); normalised names equal",
+        "detail_off": "identity HOUSTON"
+      },
+      {
+        "email_id": "email_208",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "bl_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity RUGAO NANTONG SHANGHAI"
+      },
+      {
+        "email_id": "email_243",
+        "field": "port_of_loading",
+        "off": "mismatch",
+        "on": "cannot_determine",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "bl_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names differ",
+        "detail_off": "'PORT KLANG (WESTPORT)' vs 'RUGAO NANTONG SHANGHAI', similarity 0.326"
+      },
+      {
+        "email_id": "email_243",
+        "field": "port_of_discharge",
+        "off": "mismatch",
+        "on": "cannot_determine",
+        "si_raw": "HOUSTON, US",
+        "bl_raw": "MOMBASA, KENYA",
+        "detail_on": "unresolved (SI: ambiguous: 11 codes for this name; BL: name:KEMBA); normalised names differ",
+        "detail_off": "'HOUSTON' vs 'MOMBASA', similarity 0.286"
+      },
+      {
+        "email_id": "email_273",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "bl_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity RUGAO NANTONG SHANGHAI"
+      },
+      {
+        "email_id": "email_313",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "bl_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity RUGAO NANTONG SHANGHAI"
+      },
+      {
+        "email_id": "email_313",
+        "field": "port_of_discharge",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "HOCHIMINH CITY, VIETNAM",
+        "bl_raw": "HOCHIMINH CITY, VIETNAM",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity HOCHIMINH CITY"
+      },
+      {
+        "email_id": "email_351",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "bl_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity PORT KLANG (WESTPORT)"
+      },
+      {
+        "email_id": "email_398",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "bl_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity PORT KLANG (WESTPORT)"
+      },
+      {
+        "email_id": "email_407",
+        "field": "port_of_discharge",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "YANGON, MYANMAR",
+        "bl_raw": "YANGON, MYANMAR",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity YANGON MYANMAR"
+      },
+      {
+        "email_id": "email_411",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "bl_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity PORT KLANG (WESTPORT)"
+      },
+      {
+        "email_id": "email_411",
+        "field": "port_of_discharge",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "NEW YORK, US",
+        "bl_raw": "NEW YORK, US",
+        "detail_on": "unresolved (SI: ambiguous: 3 codes for this name; BL: ambiguous: 3 codes for this name); normalised names equal",
+        "detail_off": "identity NEW YORK"
+      },
+      {
+        "email_id": "email_481",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "bl_raw": "RUGAO/NANTONG/SHANGHAI, CHINA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity RUGAO NANTONG SHANGHAI"
+      },
+      {
+        "email_id": "email_499",
+        "field": "port_of_loading",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "bl_raw": "PORT KLANG (WESTPORT), MALAYSIA",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity PORT KLANG (WESTPORT)"
+      },
+      {
+        "email_id": "email_499",
+        "field": "port_of_discharge",
+        "off": "match",
+        "on": "cannot_determine",
+        "si_raw": "HOCHIMINH CITY, VIETNAM",
+        "bl_raw": "HOCHIMINH CITY, VIETNAM",
+        "detail_on": "unresolved (SI: not_in_table; BL: not_in_table); normalised names equal",
+        "detail_off": "identity HOCHIMINH CITY"
+      }
+    ]
+  },
+  "unresolved_top": [
+    [
+      "PORT KLANG (WESTPORT), MALAYSIA",
+      13
+    ],
+    [
+      "RUGAO/NANTONG/SHANGHAI, CHINA",
+      9
+    ],
+    [
+      "HOCHIMINH CITY, VIETNAM",
+      4
+    ],
+    [
+      "HOUSTON, US",
+      3
+    ],
+    [
+      "APAPA, NIGERIA",
+      2
+    ],
+    [
+      "YANGON, MYANMAR",
+      2
+    ],
+    [
+      "NEW YORK, US",
+      2
+    ],
+    [
+      "MOMBASA, KENYA",
+      1
+    ]
+  ]
+}
