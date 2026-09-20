@@ -39,6 +39,14 @@ class RecordFilter:
     category: str | None = None
     email_id: str | None = None
     has_defect: bool | None = None
+    # Phase 14, for the reviewer UI.
+    review_reason: str | None = None
+    # None means EXCLUDE awaiting-documents records. Not a neutral default: those
+    # ~90 records are a shipper saying "the draft is coming", they are OK rather
+    # than work, and mixing them into the queue buries the genuinely broken ones.
+    awaiting_documents: bool | None = None
+    decided:  bool | None = None         # has an active human decision
+    q:        str | None = None          # free text over id, party names, ports
     limit:    int = 100
     offset:   int = 0
 

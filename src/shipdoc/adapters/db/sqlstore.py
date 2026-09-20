@@ -20,7 +20,15 @@ import json
 import uuid
 from typing import Any
 
-from sqlalchemy import create_engine, select, update
+from sqlalchemy import create_engine, delete, or_, select, update
+from sqlalchemy import func as _sqlfunc
+
+def sqlfunc_lower(col):
+    return _sqlfunc.lower(col)
+
+def sqlfunc_count():
+    return _sqlfunc.count()
+
 from sqlalchemy.orm import Session, sessionmaker
 
 from shipdoc.adapters.db.models import (
@@ -201,7 +209,16 @@ class SQLRepository:
                               "detail": e.detail}
                              for e in sorted(rec.events, key=lambda x: x.seq)]
             out["decisions"] = self.list_decisions(email_id)
-            return out
+            out["attachments"] = [
+                {"attachment_id": a.attachment_id, "filename": a.filename,
+                 "content_type": a.content_type, "detected_type": a.detected_type,
+                 "blob_url": a.blob_url}
+                for a in s.scalars(select(Attachment).where(
+                    Attachment.email_id == email_id).order_by(Attachment.filename))]
+        # Phase 14: overlay active decisions so the caller sees CURRENT truth. The
+        # stored row is never rewritten (R2); the projection happens on read.
+        from shipdoc.adapters.projection import overlay
+        return overlay(out, out["decisions"])
 
     @staticmethod
     def _record_dict(r: DBRecord) -> dict:
@@ -394,6 +411,228 @@ class SQLRepository:
                     select(sqlfunc.count()).select_from(model)) or 0
         return out
 
+
+    # ================================================================ Phase 14
+    # Everything the reviewer UI reads. Added here rather than in the API so the
+    # API stays a translation layer with no SQL and no rules in it.
+
+    def list_runs(self) -> list[dict]:
+        with self.session() as s:
+            rows = s.scalars(select(Run).order_by(Run.started_at.desc()).limit(50))
+            return [{
+                "run_id": str(r.run_id), "status": r.status,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+                "record_count": r.record_count, "degraded": r.degraded,
+                "llm_provider": r.llm_provider, "llm_model": r.llm_model,
+                "code_version": r.code_version,
+                "config_sha256": r.config_sha256,
+                "learned_labels_sha256": r.learned_labels_sha256,
+                "decisions_sha256": r.decisions_sha256,
+                "submission_sha256": r.submission_sha256,
+            } for r in rows]
+
+    def run_summary(self, run_id) -> dict | None:
+        from sqlalchemy import func as sqlfunc
+        with self.session() as s:
+            r = s.get(Run, run_id)
+            if r is None:
+                return None
+            by_status = dict(s.execute(
+                select(DBRecord.status, sqlfunc.count())
+                .where(DBRecord.run_id == run_id)
+                .group_by(DBRecord.status)).all())
+            by_category = dict(s.execute(
+                select(DBRecord.category, sqlfunc.count())
+                .where(DBRecord.run_id == run_id)
+                .group_by(DBRecord.category)).all())
+        return {"run_id": str(run_id), "by_status": by_status,
+                "by_category": by_category, "record_count": r.record_count,
+                "llm_provider": r.llm_provider, "llm_model": r.llm_model,
+                "degraded": r.degraded,
+                "submission_sha256": r.submission_sha256,
+                "learned_labels_sha256": r.learned_labels_sha256,
+                "started_at": r.started_at.isoformat() if r.started_at else None}
+
+    def _active_decisions_by_email(self, s, email_ids=None) -> dict:
+        q = select(ReviewDecision).where(ReviewDecision.superseded_by.is_(None))
+        if email_ids is not None:
+            q = q.where(ReviewDecision.email_id.in_(list(email_ids)))
+        out: dict[str, list[dict]] = {}
+        for d in s.scalars(q.order_by(ReviewDecision.decision_id)):
+            out.setdefault(d.email_id, []).append({
+                "decision_id": d.decision_id, "email_id": d.email_id,
+                "field": d.field, "decision_type": d.decision_type,
+                "verdict": d.verdict, "corrected_value": d.corrected_value,
+                "corrected_category": d.corrected_category, "note": d.note,
+                "reviewer": d.reviewer,
+                "decided_at": d.decided_at.isoformat() if d.decided_at else None})
+        return out
+
+    def list_records_page(self, f) -> dict:
+        """Filtered, searched, paginated — and with decisions overlaid.
+
+        The overlay is why a decision shows up instantly: the stored row is never
+        rewritten (R2), so the current truth is computed when the row is read.
+        """
+        from shipdoc.adapters.projection import overlay
+
+        run_id = f.run_id or self.latest_run_id()
+        if run_id is None:
+            return {"total": 0, "items": [], "limit": f.limit, "offset": f.offset}
+
+        q = select(DBRecord).where(DBRecord.run_id == run_id)
+        if f.status:
+            q = q.where(DBRecord.status == f.status)
+        if f.category:
+            q = q.where(DBRecord.category == f.category)
+        if f.review_reason:
+            q = q.where(DBRecord.review_reason == f.review_reason)
+        if f.email_id:
+            q = q.where(DBRecord.email_id == f.email_id)
+        if f.has_defect is not None:
+            q = q.where(DBRecord.has_defect == f.has_defect)
+        # Default EXCLUDES awaiting-documents: they are OK, not work.
+        if f.awaiting_documents is None:
+            q = q.where(DBRecord.awaiting_documents.is_(False))
+        else:
+            q = q.where(DBRecord.awaiting_documents == f.awaiting_documents)
+
+        with self.session() as s:
+            if f.q:
+                needle = f"%{f.q.strip().lower()}%"
+                # email id, or any compared VALUE on either side — which is how a
+                # reviewer actually searches: by a party name or a port, not by id.
+                hits = select(DBComparison.record_id).where(
+                    or_(sqlfunc_lower(DBComparison.si_value).like(needle),
+                        sqlfunc_lower(DBComparison.bl_value).like(needle)))
+                q = q.where(or_(sqlfunc_lower(DBRecord.email_id).like(needle),
+                                DBRecord.record_id.in_(hits)))
+
+            rows = list(s.scalars(q.order_by(DBRecord.email_id)))
+            decisions = self._active_decisions_by_email(
+                s, [r.email_id for r in rows])
+            items = []
+            for r in rows:
+                base = self._record_dict(r)
+                base["comparisons"] = [
+                    {"field": c.field, "verdict": c.verdict}
+                    for c in sorted(r.comparisons, key=lambda x: x.field)]
+                merged = overlay(base, decisions.get(r.email_id, []))
+                merged["defect_count"] = len(merged.get("defect_fields") or [])
+                merged.pop("comparisons", None)
+                items.append(merged)
+
+        if f.decided is not None:
+            items = [i for i in items if bool(i.get("human_decided")) == f.decided]
+        total = len(items)
+        return {"total": total, "limit": f.limit, "offset": f.offset,
+                "items": items[f.offset: f.offset + f.limit]}
+
+    def get_attachment(self, email_id: str, attachment_id: str) -> dict | None:
+        """By numeric id OR by filename, because the UI has the filename in the
+        evidence and making it look up an id first is a pointless round trip."""
+        with self.session() as s:
+            row = None
+            if str(attachment_id).isdigit():
+                row = s.get(Attachment, int(attachment_id))
+            if row is None:
+                row = s.scalar(select(Attachment).where(
+                    Attachment.email_id == email_id,
+                    Attachment.filename == attachment_id))
+            if row is None or row.email_id != email_id:
+                return None
+            return {"attachment_id": row.attachment_id, "filename": row.filename,
+                    "content_type": row.content_type, "blob_url": row.blob_url,
+                    "detected_type": row.detected_type, "sha256": row.sha256}
+
+    def apply_decision(self, *, email_id, field, decision_type, reviewer,
+                       verdict=None, corrected_value=None,
+                       corrected_category=None, note="") -> dict:
+        """Record a decision and return the record's NEW state, immediately.
+
+        No pipeline re-run: the projection is computed on read, so the caller can
+        render the new status straight from this response. The next full run reaches
+        the same answer through the engine's own `apply_decisions`.
+        """
+        detail = self.get_record_detail(email_id)
+        if detail is None:
+            raise KeyError(email_id)
+        self.record_decision(email_id, field, decision_type, reviewer,
+                             verdict=verdict, corrected_value=corrected_value,
+                             corrected_category=corrected_category, note=note)
+        return self.get_record_detail(email_id)
+
+    def dashboard_stats(self) -> dict:
+        """Counts, the AI's share of decisions, and the cache-hit rate."""
+        from sqlalchemy import func as sqlfunc
+        run_id = self.latest_run_id()
+        if run_id is None:
+            return {"run_id": None, "by_status": {}, "by_category": {},
+                    "decided_by": {}, "totals": {}}
+        with self.session() as s:
+            by_status = dict(s.execute(
+                select(DBRecord.status, sqlfunc.count())
+                .where(DBRecord.run_id == run_id)
+                .group_by(DBRecord.status)).all())
+            by_category = dict(s.execute(
+                select(DBRecord.category, sqlfunc.count())
+                .where(DBRecord.run_id == run_id)
+                .group_by(DBRecord.category)).all())
+            decided_by = dict(s.execute(
+                select(DBRecord.decided_by, sqlfunc.count())
+                .where(DBRecord.run_id == run_id)
+                .group_by(DBRecord.decided_by)).all())
+            awaiting = s.scalar(select(sqlfunc.count()).select_from(DBRecord).where(
+                DBRecord.run_id == run_id,
+                DBRecord.awaiting_documents.is_(True))) or 0
+            calls = s.scalar(select(sqlfunc.count()).select_from(LLMCall)
+                             .where(LLMCall.run_id == run_id)) or 0
+            hits = s.scalar(select(sqlfunc.count()).select_from(LLMCall).where(
+                LLMCall.run_id == run_id, LLMCall.cache_hit.is_(True))) or 0
+            decisions = s.scalar(select(sqlfunc.count()).select_from(ReviewDecision)
+                                 .where(ReviewDecision.superseded_by.is_(None))) or 0
+            pending = s.scalar(select(sqlfunc.count()).select_from(LabelProposal)
+                               .where(LabelProposal.status == "pending")) or 0
+            r = s.get(Run, run_id)
+        total = sum(by_status.values()) or 1
+        ai = decided_by.get("llm", 0)
+        return {
+            "run_id": str(run_id),
+            "by_status": {k: v for k, v in by_status.items() if k},
+            "by_category": {k: v for k, v in by_category.items() if k},
+            "decided_by": {k or "unknown": v for k, v in decided_by.items()},
+            "ai_share": round(ai / total, 4),
+            "awaiting_documents": awaiting,
+            "llm_calls": calls,
+            "cache_hit_rate": round(hits / calls, 4) if calls else None,
+            "active_decisions": decisions,
+            "pending_proposals": pending,
+            "totals": {"records": sum(by_status.values())},
+            "provider": r.llm_provider if r else None,
+            "model": r.llm_model if r else None,
+            "started_at": r.started_at.isoformat() if r and r.started_at else None,
+            "submission_sha256": r.submission_sha256 if r else None,
+            "learned_labels_sha256": r.learned_labels_sha256 if r else None,
+            "code_version": r.code_version if r else None,
+        }
+
+    def reset_demo(self) -> dict:
+        """Restore the seeded state so a public link cannot be permanently broken.
+
+        Clears human decisions and un-decides label proposals. Runs, records and
+        comparisons are LEFT ALONE — they are what the demo is showing, and deleting
+        them would mean re-running the pipeline to get the link working again.
+        """
+        from sqlalchemy import delete
+        with self.session() as s, s.begin():
+            n_dec = s.scalar(select(sqlfunc_count()).select_from(ReviewDecision)) or 0
+            s.execute(delete(ReviewDecision))
+            n_learn = s.scalar(select(sqlfunc_count()).select_from(LearnedLabel)) or 0
+            s.execute(delete(LearnedLabel))
+            s.execute(update(LabelProposal).values(
+                status="pending", decided_by=None, decided_at=None))
+        return {"decisions_cleared": n_dec, "learned_labels_cleared": n_learn}
 
 def _f(v):
     return None if v is None else float(v)

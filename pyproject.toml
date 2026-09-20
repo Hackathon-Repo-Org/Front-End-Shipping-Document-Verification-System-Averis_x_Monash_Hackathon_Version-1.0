@@ -44,8 +44,11 @@ db = ["sqlalchemy>=2.0", "alembic>=1.13", "psycopg[binary]>=3.1"]
 # metadata and skips the upload when this is absent.
 blob = ["azure-storage-blob>=12.19"]
 
-dev = ["pytest>=8.0"]
-all = ["shipdoc[ocr,llm,hosted,db,dev]"]
+# Phase 14. The HTTP API. Optional: the engine and the CLI need none of it.
+api = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+
+dev = ["pytest>=8.0", "httpx>=0.27"]
+all = ["shipdoc[ocr,llm,hosted,db,api,dev]"]
 
 [project.scripts]
 shipdoc = "shipdoc.cli:main"

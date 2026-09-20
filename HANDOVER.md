@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 737 passed, 0 failed. Output deterministic. The next work —
+**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 765 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, five tiers; Tier 1 is five minutes, Tier 5 is Azure) and

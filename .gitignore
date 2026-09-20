@@ -43,3 +43,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Phase 14 — the demo database is a build artifact of a run, not source.
+output/shipdoc.db

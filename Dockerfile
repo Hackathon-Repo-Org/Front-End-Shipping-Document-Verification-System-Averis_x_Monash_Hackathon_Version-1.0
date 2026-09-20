@@ -1,11 +1,14 @@
 # shipdoc — batch verification of shipping instructions against draft bills of lading.
 #
-# WHAT THIS IMAGE IS TODAY
-# ------------------------
-# A BATCH processor, not a web service. There is no HTTP API yet, so on Azure this
-# deploys as a **Container Apps Job** (run on a schedule or on demand), which is the
-# right primitive for something that processes an inbox and exits. When the API
-# lands, the same image gains an ingress and becomes a Container App — see SETUP.md.
+# ONE IMAGE, TWO ROLES
+# --------------------
+# Phase 14 added the HTTP API, so this image now serves both:
+#
+#   docker run shipdoc run           -> the BATCH processor (Container Apps JOB)
+#   docker run shipdoc serve         -> the HTTP API        (Container APP, ingress)
+#
+# Same code, same cache, same config; only the entrypoint differs. That is why the
+# Phase 13 deployment guide did not have to be thrown away when the API arrived.
 #
 # WHAT IS DELIBERATELY NOT IN HERE
 # --------------------------------
@@ -31,10 +34,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Tesseract for the three scanned PDFs. pip cannot install it, so it has to come
+# from the OS layer — without it those records are NEEDS_REVIEW, which is the
+# correct answer but not the complete one.
+RUN apt-get update  && apt-get install -y --no-install-recommends tesseract-ocr poppler-utils  && rm -rf /var/lib/apt/lists/*
+
 # Dependency layer first, so a source edit does not reinstall the world.
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
-RUN pip install --no-cache-dir ".[hosted,db]"
+RUN pip install --no-cache-dir ".[hosted,db,ocr,api]"
 
 # Everything the run actually reads. `dataset/` carries the organisers' loader.py and
 # the corpus; `cache/llm/` is what makes a run reproducible with no model.
@@ -56,5 +64,8 @@ USER shipdoc
 HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=2 \
     CMD ["shipdoc", "doctor", "--fast"]
 
-ENTRYPOINT ["shipdoc"]
+# `serve` is not a shipdoc subcommand — it is the API. The shim keeps one entrypoint
+# so the Container Apps job and the Container App differ by ONE argument.
+COPY docker-entrypoint.sh /usr/local/bin/
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["run"]

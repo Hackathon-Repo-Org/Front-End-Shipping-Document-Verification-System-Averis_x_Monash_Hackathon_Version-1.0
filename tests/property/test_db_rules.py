@@ -68,6 +68,11 @@ def test_r1_the_database_package_does_not_import_the_core():
     become a second place where the rules live.
     """
     allowed = {"shipdoc.types", "shipdoc.errors", "shipdoc.adapters.db",
+               # A SIBLING adapter module is fine — same layer. `projection` was
+               # moved out of adapters/api/ for exactly this reason: the decision
+               # overlay is a repository concern that the API also happens to use,
+               # and leaving it under api/ made the database depend on the web tier.
+               "shipdoc.adapters.projection",
                "shipdoc.ingest.loader_port"}   # seed reads the corpus, by design
     offenders = []
     for p in DB_PKG.rglob("*.py"):

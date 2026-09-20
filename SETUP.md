@@ -538,6 +538,151 @@ live.
 
 ---
 
+## Tier 6 — the API and the reviewer UI, deployed split
+
+Phase 14. **The frontend and the backend deploy separately and talk only over HTTP.**
+No shared process, no shared filesystem, no server-side rendering of our data.
+
+```
+Azure Static Web Apps          Azure Container Apps        Azure PostgreSQL
+  ui/  (built SPA)   ──HTTP──►  shipdoc serve  ──────────►  Flexible Server
+  free tier                      1 replica min               Burstable B1ms
+```
+
+### 6a. Run both halves locally first
+
+Two origins on one machine, which is the real thing in miniature — it exercises CORS
+and preflight exactly as the cloud does.
+
+```powershell
+# terminal 1 — the API on :8000
+$env:DATABASE_URL="sqlite:///output/shipdoc.db"
+$env:DEMO_PASSCODE="averis2026"
+$env:CORS_ORIGINS="http://localhost:5173"
+python -m shipdoc db seed
+python -m shipdoc                       # a run, so there is something to review
+python -m uvicorn shipdoc.adapters.api.app:app --port 8000
+
+# terminal 2 — the UI on :5173
+cd ui
+npm install
+Copy-Item .env.example .env             # VITE_API_BASE_URL=http://localhost:8000
+npm run dev
+```
+
+Open <http://localhost:5173>. Set your **name** and the **passcode** from the button
+in the top right — reads work without either, writes need both.
+
+### 6b. Deploy the backend
+
+The image from Tier 5 already serves the API; `serve` is the only difference.
+
+```bash
+az containerapp create \
+  --name shipdoc-api --resource-group $RG --environment shipdoc-env \
+  --image $ACR_SERVER/shipdoc:v1 \
+  --registry-server $ACR_SERVER --registry-username $ACR --registry-password "$ACR_PASS" \
+  --ingress external --target-port 8000 \
+  --min-replicas 1 --max-replicas 3 \
+  --cpu 1.0 --memory 2.0Gi \
+  --secrets db-url="postgresql+psycopg://...?sslmode=require" \
+            deepseek-key="$DEEPSEEK_API_KEY" \
+            demo-code="$DEMO_PASSCODE" \
+  --env-vars DATABASE_URL=secretref:db-url \
+             DEEPSEEK_API_KEY=secretref:deepseek-key \
+             DEMO_PASSCODE=secretref:demo-code \
+             CORS_ORIGINS="https://<your-swa>.azurestaticapps.net" \
+             SHIPDOC_ROOT=/app \
+  --command /usr/local/bin/docker-entrypoint.sh --args serve
+
+API_URL=https://$(az containerapp show -n shipdoc-api -g $RG \
+  --query properties.configuration.ingress.fqdn -o tsv)
+```
+
+> **`--min-replicas 1`, not 0.** Scale-to-zero saves pennies and costs you the demo:
+> the first judge to click waits ~20 seconds for a cold start and assumes it is
+> broken. The UI shows a loading state for exactly this reason, but do not rely on it.
+
+> **`SHIPDOC_ROOT=/app`.** The API looks for `config/`, `dataset/` and `cache/`
+> relative to this. Without it, a pip-installed package resolves paths inside
+> site-packages, `/api/health` reports `provider: null`, and the cause looks like
+> anything except a path. This was found by running the image, not by reading it.
+
+### 6c. Deploy the frontend
+
+The API URL is **build-time** config, so the backend must exist first.
+
+```bash
+cd ui
+echo "VITE_API_BASE_URL=$API_URL" > .env.production
+npm ci && npm run build
+
+az staticwebapp create --name shipdoc-ui --resource-group $RG \
+  --location eastasia --sku Free
+az staticwebapp deploy --name shipdoc-ui --resource-group $RG \
+  --source dist --env production
+```
+
+Then **go back and set `CORS_ORIGINS` on the API to the Static Web App's real
+origin** — it is not known until the app is created:
+
+```bash
+SWA_URL=https://$(az staticwebapp show -n shipdoc-ui -g $RG --query defaultHostname -o tsv)
+az containerapp update -n shipdoc-api -g $RG \
+  --set-env-vars CORS_ORIGINS="$SWA_URL"
+```
+
+### 6d. Five things that break a split deployment
+
+Each of these was handled explicitly; each is worth re-checking after any change.
+
+| # | Trap | How it presents | What was done |
+|---|---|---|---|
+| 1 | **CORS origin** | every request blocked | exact origins from `CORS_ORIGINS`, never `*`. A wildcard is rejected by browsers once custom headers are involved, and invites anyone's page to drive the API |
+| 2 | **Preflight on the passcode header** | **reads work, writes fail** — looks exactly like a backend bug and is not | `X-Demo-Passcode` and `OPTIONS` are allowed explicitly; `test_cors_allows_the_passcode_header_and_options` asserts it |
+| 3 | **Cookies for auth** | works on your laptop, fails in incognito and on Safari | there are none. Header-based only; a cookie across two Azure domains is third-party and blocked |
+| 4 | **Hardcoded API hostname** | one origin works, the other 404s | `VITE_API_BASE_URL` only; a build with it unset says so instead of silently calling a relative path |
+| 5 | **The source viewer crosses the origin too** | the app works, then a PDF will not render | the API serves the extracted text *and* proxies the raw bytes with an explicit `Content-Type`; both were tested cross-origin, `.txt` and `.pdf` |
+
+### 6e. Demo safety
+
+- **The 520-record demo runs entirely from the committed cache** — no model call, no
+  API key, nothing that can rate-limit mid-judging.
+- **Reads are open; writes need the passcode** on the slide. With no passcode set the
+  API is read-only rather than wide open — failing closed is the only safe default
+  for something with a public URL.
+- **Reset demo** (dashboard) restores the seeded state, so nobody can permanently
+  break the link. It clears decisions and un-decides proposals; it leaves the run
+  itself alone, because re-running to recover would take minutes.
+- **Every failure path is a readable message.** A stack trace in a response body is a
+  bad demo and an information leak.
+
+### 6f. Check it the way a judge will
+
+```bash
+curl -s $API_URL/api/health | jq
+```
+
+Then, **in an incognito window on a phone**:
+
+1. open the Static Web App URL — the dashboard fills in
+2. Inbox → filter by status → the URL changes → copy it → open in a new tab: same view
+3. open a record with a defect → click a value → the source opens at the highlighted line
+4. enter the passcode → confirm a field → the status changes with no reload
+5. reload the page → the change is still there
+
+If step 4 fails but everything else works, it is trap #2. Check the preflight before
+changing anything else:
+
+```bash
+curl -s -i -X OPTIONS $API_URL/api/records/email_013/decisions \
+  -H "Origin: $SWA_URL" -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type,x-demo-passcode" \
+  | grep -i access-control
+```
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
