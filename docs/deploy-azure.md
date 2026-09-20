@@ -40,6 +40,21 @@ az group create --name $RG --location $LOC
 
 ## 1. Container registry, build and push 📋
 
+> ### 🤝 A teammate has already wired CI for this
+> `.github/workflows/build-image.yml` builds and pushes the image to
+> **`shipdocacrle2026.azurecr.io/shipdoc:latest`** on every push to `main`, using the
+> `ACR_USERNAME` / `ACR_PASSWORD` repository secrets.
+>
+> **If that registry is the one you are using, skip step 1** — the image is already
+> built and pushed. Set `ACR_SERVER=shipdocacrle2026.azurecr.io` and
+> `--image $ACR_SERVER/shipdoc:latest` in step 3.
+>
+> Also note the Dockerfile's default command is now **`serve`** (the API), so the
+> Container App in step 3 needs no `--command`/`--args` override. The batch job still
+> works with `--args run`.
+
+
+
 `az acr build` builds **in Azure**, so you do not need Docker locally and you cannot
 get the architecture wrong.
 
