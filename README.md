@@ -16,31 +16,41 @@ escalated to a human with the evidence attached rather than guessed at.
 
 ## Current score
 
-Measured **2026-09-20** against the organisers' own `scoring.py`, imported directly
+Measured **2026-09-21** against the organisers' own `scoring.py`, imported directly
 rather than reimplemented.
 
-| Axis | Weight | Hand-written rules | With 4 learned labels |
+| Axis | Weight | `deepseek` (default) | `ollama` (one config line) |
 |---|---|---|---|
-| Stage 1 — email classification (macro-F1) | 0.30 | 0.9526 | 0.9526 |
-| Stage 3 — defect detection (F1) | 0.20 | 0.9890 · P **1.000** | **1.0000** · P 1.000 R 1.000 |
-| End-to-end — defects caught exactly | 0.50 | 0.9348 — 43/46 | **1.0000** — **46/46** |
+| Stage 1 — email classification (macro-F1) | 0.30 | 0.7591 | **0.9526** |
+| Stage 3 — defect detection (F1) | 0.20 | **1.0000** · P 1.000 R 1.000 | **1.0000** · P 1.000 R 1.000 |
+| End-to-end — defects caught exactly | 0.50 | **1.0000** — 46/46 | **1.0000** — 46/46 |
 | Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** | recall **1.000** |
-| **Final** | | **0.9510** | **0.9858** |
+| **Final** | | **0.9277** | **0.9858** |
 
-All **20/20** planted edge cases correct. 776 tests pass. Two runs produce
+All **20/20** planted edge cases correct on both. 776 tests pass. Two runs produce
 byte-identical output.
 
-**Two numbers, and the difference is the point.** The left column is the system with
-hand-written rules only — delete `config/learned_labels.yaml` and you get it back,
-byte for byte. The right column adds four approved label mappings (four spellings of
-*total gross weight* that appear on PDF bills of lading), which is what closes the
-last three end-to-end misses. Every run records which vocabulary produced it, in
-`run_summary.json` → `learned_labels_sha256`.
+> **The default is the hosted model, and that is a deliberate trade.**
+> `deepseek-chat` ships as the default because the deployed target is Azure Container
+> Apps, which has no GPU — a hosted API is the realistic path for new email traffic.
+> It costs **0.058 of final score** on this corpus.
+>
+> **Defect detection and end-to-end are identical**: both providers find all 46
+> defect emails exactly. The whole difference is stage-1 classification, and almost
+> all of *that* is one systematic error — deepseek reads 106 gold `SI_REQUEST` emails
+> as `BL_COMPARISON`, where qwen gets 124 of 125 right. The prompt was developed
+> against qwen and never adapted; rewriting it until the hosted number improved would
+> be tuning against the answer key.
+>
+> **For 0.9858, change one line** in `config/pipeline.yaml` to `provider: ollama`.
+> Neither option needs an API key or a GPU — the committed cache answers every prompt
+> for both models.
 
-> ⚠️ Those four entries were approved by a **demo script, not by a person**, and say
-> so in their own provenance. They are believed correct and are measured, but the
-> design says a human approves — so review them, re-approve them under your own name,
-> or delete the file. See [HANDOVER.md](HANDOVER.md).
+**Two numbers, and the difference is the point.** Deleting
+`config/learned_labels.yaml` returns the system to hand-written rules only, byte for
+byte. The four approved label mappings are what close the last three end-to-end
+misses. Every run records which vocabulary produced it, in `run_summary.json` →
+`learned_labels_sha256`.
 
 **On that precision of 1.000:** it is measured on the provided 520-email corpus, and
 it is a fact about that corpus rather than a property of the system — on three
@@ -76,11 +86,16 @@ not done — the finding is reported instead. Full analysis, including a temptin
 explanation that was **tested and falsified**, is in
 [HANDOVER.md](HANDOVER.md) under *Provider comparison*.
 
-**`qwen2.5:7b-instruct` ships as the default.** DeepSeek is one config line away and
-is the right choice for a GPU-less deployment that accepts 0.058 of final score.
-Ollama also remains the **offline / air-gapped** option — this system runs with no
-outbound network at all, which is a real requirement for a freight operator handling
-commercial documents.
+**`deepseek-chat` ships as the default** (changed 2026-09-21), because the deployed
+target has no GPU and a hosted API is the realistic path for new email traffic.
+
+**`ollama` remains fully supported and scores higher** — one config line, and it is
+also the **offline / air-gapped** option: the system runs with no outbound network at
+all, which is a real requirement for a freight operator handling commercial
+documents. Removing it was never on the table.
+
+Neither needs an API key for the 520-record corpus: the committed cache holds both
+models' answers, keyed by model name so they never collide.
 
 ## The web interface
 

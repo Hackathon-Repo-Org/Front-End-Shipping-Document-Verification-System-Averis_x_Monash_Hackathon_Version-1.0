@@ -24,9 +24,34 @@ thresholds:
     grey_low: 0.75
 
 llm:
-  # Patch §8: an instruct model is preferred over qwen2.5vl for M07, whose hard
-  # requirement is exactly-one-of-five-strings. Availability is verified at stage 3.
-  model: qwen2.5:7b-instruct
+  # ==========================================================================
+  # PROVIDER: deepseek (hosted) is the DEFAULT. ollama (local) is the option.
+  #
+  # Rationale: the deployed target is Azure Container Apps, which has no GPU.
+  # A hosted, OpenAI-compatible API is the realistic production path for new
+  # email traffic; a local 7B model is the special case, not the norm.
+  #
+  # >>> THIS CHOICE COSTS 0.058 OF FINAL SCORE ON THIS CORPUS. <<<
+  #
+  #     provider: deepseek  ->  0.9277   (macro-F1 0.7591)
+  #     provider: ollama    ->  0.9858   (macro-F1 0.9526)
+  #
+  # The difference is almost entirely ONE systematic error: deepseek-chat reads
+  # 106 gold SI_REQUEST emails as BL_COMPARISON, where qwen gets 124 of 125
+  # right. The prompt was developed against qwen over phases 3-11 and was never
+  # adapted; rewriting it until the hosted number improved would be tuning
+  # against the answer key, which this project has forbidden since phase 3.
+  # See HANDOVER.md -> "Provider comparison".
+  #
+  # TO GET THE HIGHER SCORE, CHANGE ONE LINE: provider: ollama
+  # (needs Ollama running with qwen2.5:7b-instruct, or just the committed cache)
+  #
+  # Either way the committed cache in cache/llm/ answers every prompt this
+  # corpus asks, so BOTH providers reproduce their number with no API key and
+  # no network. Cache keys include the model name, so they never collide.
+  # ==========================================================================
+  provider: deepseek
+  model: deepseek-chat
   prompt_version: v1
   timeout_s: 30.0
   temperature: 0.0

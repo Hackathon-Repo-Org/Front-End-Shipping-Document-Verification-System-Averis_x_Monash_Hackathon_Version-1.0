@@ -121,13 +121,20 @@ echo "$API_URL"
 > **Secrets go in `--secrets` and are referenced as `secretref:`.** A value passed
 > straight into `--env-vars` is visible in `az containerapp show` and in the portal.
 
-### 3b. The AI provider — you probably do NOT need a key
+### 3b. The AI provider
 
-The image ships the committed LLM cache, so **the 520-record demo runs with no API
-key and no outbound AI call at all.** That is the safest configuration for judging:
-nothing can rate-limit you mid-demo.
+`config/pipeline.yaml` ships with **`provider: deepseek`**.
 
-Only if you want live hosted inference:
+**You still do NOT need a key for the demo.** The image bakes in the committed LLM
+cache, which holds deepseek-chat's answers for all 520 records, so the corpus demo
+runs with **no API key and no outbound AI call**. That is the safest configuration
+for judging: nothing can rate-limit you mid-demo.
+
+A key is only needed for **new** emails — the `/try` page with unseen text, or real
+inbox traffic. Without one the system degrades to deterministic keyword rules and
+says so, rather than failing.
+
+To supply it:
 
 ```bash
 az containerapp secret set -n shipdoc-api -g $RG \
@@ -136,9 +143,11 @@ az containerapp update -n shipdoc-api -g $RG \
   --set-env-vars DEEPSEEK_API_KEY=secretref:deepseek-key
 ```
 
-…and set `llm.provider: deepseek` / `llm.model: deepseek-chat` in
-`config/pipeline.yaml` **before** building the image. Measured cost of doing so:
-**−0.058 final score** on this corpus (0.9277 vs 0.9858). See the README.
+**Score note:** the default costs **0.058** against `provider: ollama`
+(0.9277 vs 0.9858) — entirely in stage-1 classification; defect detection and
+end-to-end are identical. If the judged number matters more than cloud realism, set
+`provider: ollama` in `config/pipeline.yaml` **before** `az acr build`. It needs no
+GPU and no key either, because the cache covers both.
 
 ---
 

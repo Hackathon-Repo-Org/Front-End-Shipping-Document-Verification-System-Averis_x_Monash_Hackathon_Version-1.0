@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 776 passed, 0 failed. Output deterministic. The next work —
+**Default provider is now `deepseek` — score 0.9277.** Switch one config line to `provider: ollama` for **0.9858**. Both reproduce with no API key; see "Which provider, and what it costs" below. Suite 776 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, five tiers; Tier 1 is five minutes, Tier 5 is Azure) and
@@ -10,25 +10,56 @@ Start here: **`SETUP.md`** (install, five tiers; Tier 1 is five minutes, Tier 5 
 
 ## Where it stands
 
-| Axis | Weight | Hand-written rules only | + 4 learned labels |
+## Which provider, and what it costs
+
+The default was switched to **deepseek-chat** on 2026-09-21, because the deployed
+target is Azure Container Apps and it has no GPU. A hosted OpenAI-compatible API is
+the realistic path for new email traffic; a local 7B model is the special case.
+
+**That choice costs 0.058 of final score on this corpus, and that is a deliberate,
+documented trade — not an accident.**
+
+| Axis | Weight | `provider: deepseek` (default) | `provider: ollama` (option) |
 |---|---|---|---|
-| stage-1 macro-F1 (category) | 0.30 | 0.9526 · acc 0.9500 | 0.9526 · acc 0.9500 |
-| stage-3 defect-F1 | 0.20 | 0.9890 · P 1.000, R 0.978 | **1.0000** · P 1.000, R **1.000** |
-| end-to-end | 0.50 | 0.9348 — 43/46 | **1.0000** — **46/46** |
-| reliability (unscored) | 0.00 | esc-P 0.408, R **1.000** | esc-P 0.476, R **1.000** |
-| **final** | | **0.9510** | **0.9858** |
+| stage-1 macro-F1 | 0.30 | 0.7591 · acc 0.7538 | **0.9526** · acc 0.9500 |
+| stage-3 defect-F1 | 0.20 | **1.0000** · P 1.000 R 1.000 | **1.0000** · P 1.000 R 1.000 |
+| end-to-end | 0.50 | **1.0000** — 46/46 | **1.0000** — 46/46 |
+| reliability (unscored) | 0.00 | esc-R 1.000 | esc-R 1.000 |
+| **final** | | **0.9277** | **0.9858** |
 
-Planted edge cases **20/20**.
+Defect detection and end-to-end are **identical** — both find all 46 defect emails
+exactly. The entire difference is stage 1, and almost all of that is ONE systematic
+error: deepseek-chat reads **106 gold `SI_REQUEST` emails as `BL_COMPARISON`**, where
+qwen gets 124 of 125 right.
+
+The prompt was developed against qwen across phases 3–11 and was never adapted for
+deepseek. Rewriting it until the hosted number improved would be tuning against the
+answer key — forbidden since phase 3, and it would void every number in this table.
+
+**To get 0.9858, change one line** in `config/pipeline.yaml`:
+
+```yaml
+llm:
+  provider: ollama
+  model: qwen2.5:7b-instruct
+```
+
+Neither needs an API key or a GPU: the committed cache in `cache/llm/` answers every
+prompt this corpus asks, for both models. Cache keys include the model name, so the
+two sets never collide.
 
 ```
-learned vocabulary ABSENT   submission.json  70960e8defa4873f23cda5187fe8f91216f5039bdfd0de6e9e6a01f0729762b3
-learned vocabulary PRESENT  submission.json  7ff39d877aef07c862722767fcac44f7da550f08376477e5d54f03ae0eb81195
-                            learned_labels.yaml sha256  554f11cc…  (4 approved)
+provider: deepseek (default)  submission.json  4a8cf6ba5e01d202342fa1b94c062f212f619715c38f0f13da5f52048a97f577
+provider: ollama  (option)    submission.json  7ff39d877aef07c862722767fcac44f7da550f08376477e5d54f03ae0eb81195
+learned vocabulary ABSENT     submission.json  70960e8defa4873f23cda5187fe8f91216f5039bdfd0de6e9e6a01f0729762b3
+learned vocabulary PRESENT    submission.json  4a8cf6ba5e01d202342fa1b94c062f212f619715c38f0f13da5f52048a97f577
 ```
 
-The first hash is the Phase 10 baseline, reproduced exactly by moving
-`config/learned_labels.yaml` aside — that is how "inert until approved" was verified
-rather than asserted.
+Planted edge cases **20/20** on both providers.
+
+The `learned vocabulary ABSENT` hash is the Phase 10 baseline, reproduced exactly by
+moving `config/learned_labels.yaml` aside — that is how "inert until approved" was
+verified rather than asserted.
 
 > ### ⚠️ The published hashes changed once, on 2026-09-20. The CONTENT did not.
 >

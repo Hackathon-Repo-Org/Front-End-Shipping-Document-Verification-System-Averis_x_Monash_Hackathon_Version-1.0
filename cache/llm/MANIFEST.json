@@ -3,7 +3,7 @@
     "deepseek-chat",
     "qwen2.5:7b-instruct"
   ],
-  "model": "qwen2.5:7b-instruct",
+  "model": "deepseek-chat",
   "prompt_version": "v1",
   "entries": 840,
   "note": "Answers produced by this system's own models at temperature 0. Keys are sha256(model + prompt_version + prompt + choices), so entries from different models coexist and never collide \u2014 see 'models' for every provider that has written here. Values are either one of the five category strings (the M07 classifier) or one compared-field name / NONE / a rejected free-text reply (the Phase 11 label proposer). No email text, no API key and no gold labels are stored. Clear with: rm -rf cache/llm, then re-run."
