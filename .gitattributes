@@ -1,0 +1,5 @@
+# Shell scripts must keep Unix line endings. A CRLF entrypoint makes the Linux
+# container exit with an exec-format error and no application log.
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-entrypoint.sh text eol=lf

@@ -67,5 +67,17 @@ HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=2 \
 # `serve` is not a shipdoc subcommand — it is the API. The shim keeps one entrypoint
 # so the Container Apps job and the Container App differ by ONE argument.
 COPY docker-entrypoint.sh /usr/local/bin/
+
+# The shim is authored on Windows, so it can arrive with CRLF line endings and
+# without the executable bit. Either one makes the container exit immediately with
+# an exec-format or permission error and no application log. Normalising it here
+# means the image starts correctly no matter how the file was checked out.
+USER root
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod 0755 /usr/local/bin/docker-entrypoint.sh
+USER shipdoc
+
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["run"]
+
+# Default to the HTTP API. The batch job overrides this with `run`.
+CMD ["serve"]
