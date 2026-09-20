@@ -51,6 +51,12 @@ def _version() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Phase 12. Fill gaps from .env if one exists. A REAL environment variable
+    # always wins — Azure injects App Settings as real env vars, and a stray .env
+    # baked into an image must never shadow them.
+    from shipdoc.infra.dotenv import load as load_dotenv
+    load_dotenv()
+
     args = build_parser().parse_args(argv)
 
     if args.command == "doctor":

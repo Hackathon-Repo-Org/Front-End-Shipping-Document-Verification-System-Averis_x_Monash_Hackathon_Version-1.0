@@ -304,17 +304,31 @@ def write_atomic(path: Path, payload: object) -> None:
     """Temp file plus rename: a killed process must not leave a half-written artifact
     that deserialises into garbage on the next run.
 
-    TEXT mode, deliberately. It is what produced every published hash, and switching
-    to binary would silently rewrite all of them on Windows.
+    NEWLINE IS PINNED TO "\\n". THIS IS A CROSS-PLATFORM INVARIANT, NOT A STYLE.
+
+    Python's text mode translates "\\n" to the platform separator, so the same run on
+    Windows and on Linux produced *different bytes* and therefore different hashes.
+    This repository's artifacts were published from Windows (CRLF); Azure Container
+    Apps is Linux (LF). Left alone, the deployed service would emit a hash that
+    disagrees with the published one, and the discovery would be made by a judge
+    rather than by us.
+
+    The JSON content was never platform-dependent — only the line endings were — so
+    normalising costs nothing except a one-time change of the published hash, which
+    is recorded in HANDOVER.md alongside the old one.
+
+    `test_artifacts_are_byte_identical_across_platforms` guards it: an invariant with
+    no test is a convention, and conventions do not survive a refactor.
+
+    sort_keys=False deliberately: entries must keep sample_submission.json's field
+    order. Determinism (I6) comes from callers emitting in sorted email_id order, not
+    from re-sorting every nested object.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            # sort_keys=False deliberately: entries must keep sample_submission.json's
-            # field order. Determinism (I6) comes from callers emitting in sorted
-            # email_id order, not from re-sorting every nested object.
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
             json.dump(payload, fh, indent=2, sort_keys=False, ensure_ascii=False)
             fh.write("\n")
         os.replace(tmp, path)

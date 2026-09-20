@@ -21,14 +21,39 @@ Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
 Planted edge cases **20/20**.
 
 ```
-learned vocabulary ABSENT   submission.json  c02b4f44e6fdda4fc7c72efa40aaca6d73052ebf32254574617ad5b42c8a9b64
-learned vocabulary PRESENT  submission.json  676d2fc4abf2e1b082fbfd9ddd765057b2b747bcb756cade500b5e0ef46540cf
+learned vocabulary ABSENT   submission.json  70960e8defa4873f23cda5187fe8f91216f5039bdfd0de6e9e6a01f0729762b3
+learned vocabulary PRESENT  submission.json  7ff39d877aef07c862722767fcac44f7da550f08376477e5d54f03ae0eb81195
                             learned_labels.yaml sha256  554f11cc…  (4 approved)
 ```
 
 The first hash is the Phase 10 baseline, reproduced exactly by moving
 `config/learned_labels.yaml` aside — that is how "inert until approved" was verified
 rather than asserted.
+
+> ### ⚠️ The published hashes changed once, on 2026-09-20. The CONTENT did not.
+>
+> Artifacts were written in Python's text mode, which translates `\n` to the
+> platform separator. Every hash published before this date was therefore a hash of
+> **CRLF** bytes, because they were all produced on Windows. Azure Container Apps is
+> Linux and would have written **LF** — the same JSON, different bytes, a different
+> sha256, and the discrepancy would have been found by a judge comparing the
+> deployed service against this document.
+>
+> `write_atomic` now pins `newline="\n"`, so the bytes are identical on every
+> platform. Nothing about the submission's content, field order or encoding changed.
+>
+> | | before (CRLF) | now (LF) |
+> |---|---|---|
+> | with the learned vocabulary | `676d2fc4…` | **`7ff39d87…`** |
+> | without it (Phase 10 baseline) | `c02b4f44…` | **`70960e8d…`** |
+>
+> Both are recorded so that reports written before the change remain interpretable.
+> A report quoting `676d2fc4` is not wrong; it is quoting the same submission with
+> Windows line endings.
+>
+> `tests/property/test_artifact_bytes.py` asserts no artifact contains a `\r` byte,
+> and was verified to fail when the pin is removed. This is a cross-platform
+> invariant now, so it has a guard rather than a convention.
 
 Reproduce: `python -m shipdoc` then `python eval/evaluate.py` (needs the organiser
 bundle at `../sdoc-server/`). The evaluator writes `eval/report.txt`.
@@ -131,6 +156,13 @@ querying; `BIGSERIAL` becomes `IDENTITY`; `TIMESTAMPTZ` becomes
 (`CREATE UNIQUE INDEX … WHERE active = 1`), which SQL Server does support. The
 `JSONBType` and `GUID` `TypeDecorator`s in `models.py` are the only places that would
 need a third branch — everything else is dialect-neutral SQLAlchemy.
+
+**A local PostgreSQL is running on port 55432** (`docker ps` → `shipdoc-pg`,
+`postgres:16-alpine`, password `devonly`, database `shipdoc`). It exists so the
+Phase 13 gates can be re-run without an Azure subscription — the migration, the
+520-record write and the seed-idempotency check all target it. It holds no secrets
+and nothing depends on it at runtime; `docker rm -f shipdoc-pg` removes it and only
+the database-specific gates stop being runnable.
 
 **The one thing to know before deploying:** a Container App's **outbound** IP is not
 the one shown in the portal overview, and it changes on scale or redeploy. A
