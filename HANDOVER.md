@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 765 passed, 0 failed. Output deterministic. The next work —
+**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 776 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, five tiers; Tier 1 is five minutes, Tier 5 is Azure) and
@@ -103,6 +103,15 @@ Progression: **0.8582 → 0.9510**.
 - **`tests/golden/` holds only the edge cases.** Other golden cases still live inside
   `tests/unit/test_stage4_compare.py`. Cosmetic; splitting test files is the one
   operation that can silently lose a test.
+- **The read-time decision overlay duplicates `state/machine.evaluate`.**
+  `adapters/projection.py` recomputes a status from field verdicts rather than
+  calling the real evaluator. It is kept honest by
+  `test_overlay_agrees_with_the_engine_on_every_verdict_shape`, which runs both over
+  every combination — but two implementations tested for agreement is weaker than
+  one implementation. The fix is to rehydrate a `Record` from the stored comparisons
+  and call `evaluate` directly; the layering permits it (`adapters` sits above
+  `state`) and `leaning` — the one field `evaluate` needs beyond the verdict — IS
+  stored. This was scoped for Phase 15 and not completed.
 - **Documentation:** invariant I3 says a value must appear "word for word in the
   source document". It is really "in the text extracted from the document". The docx
   case is exactly where that distinction bit. Worth correcting in the spec.
@@ -292,6 +301,70 @@ line catches these, which is the entire argument for the approval gate.
 They are queued in `output/label_proposals.json`, pending, **deliberately not
 rejected** — they are the evidence. A reviewer should reject all five, which records
 them as anti-synonyms so the question never returns.
+
+### Phase 14 + 15 — the API, the reviewer UI, and "try it yourself"
+
+Closes A1 (cloud), A2 (public link + UI) and A4 (review loop).
+
+**Two repositories, deployed separately.**
+
+| | Repository | Hosts on |
+|---|---|---|
+| Backend + engine | `Shipping-Document-Verification-System-Averis_x_Monash_Hackathon` | Azure Container Apps |
+| Reviewer UI | `Front-End-...-Averis_x_Monash_Hackathon_Version-1.0` | Azure Static Web Apps |
+
+They share nothing but HTTP. No shared process, no shared filesystem.
+
+**The API is a translation layer.** It lives in `adapters/api/` — `adapters` is the
+top layer, so the layering test needed no new entry and the architecture says the
+same thing it always did. Two tests enforce the thinness: one parses the handlers
+with `ast` for engine vocabulary, one forbids importing `compare/` or `state/`.
+
+**A decision applies instantly without breaking run immutability.** R2 says a
+finished run's rows never change; R3 says a decision is about the email and must
+apply at once. Writing the new status into `records` would satisfy R3 by breaking R2
+and lose the answer to "what did the system say before a human touched it?". So the
+stored row is never modified and decisions are overlaid when a record is READ
+(`adapters/projection.py`). The next full run reaches the same answer through the
+engine's own `apply_decisions`, by a different route.
+
+**Try it yourself** (`/try`, `POST /api/try`) runs the real engine over a pasted
+SI/BL pair — same normaliser, comparators and state machine; only ingest and extract
+are skipped. No passcode, no storage, no API key, size-capped. A worked example
+prefills a pair with one planted defect so the first click finds something.
+
+**Design credit.** The UI's look is adopted from the team's prototype, cloned
+read-only outside the tree at `6734871` and never modified. `docs/design-notes.md`
+records what was taken and what was not. One deliberate change: verdicts carry an
+icon as well as a colour, because the prototype used colour alone.
+
+### Container rehearsal — what was verified before deploying
+
+| Check | Result |
+|---|---|
+| runs as non-root | uid **10001** (`shipdoc`) |
+| port | **8000**, what Container Apps expects |
+| Tesseract | `/usr/bin/tesseract` |
+| LLM cache baked in | 841 files |
+| `/api/health` from inside the container | `provider: ollama`, 520 records — **not null** |
+| **full 520 run with `DEEPSEEK_API_KEY` empty** | completes, reproduces `7ff39d87…` |
+| cross-origin preflight | `X-Demo-Passcode` + `OPTIONS` allowed |
+| foreign origin | refused (400) |
+
+**The demo needs no API key.** That is the property that matters for judging:
+nothing can rate-limit mid-demo.
+
+### Not done
+
+- **Not deployed.** `az` is not installed on the build machine and `az login` is
+  interactive browser auth. `docs/deploy-azure.md` has the full sequence, every step
+  marked as needing a human or not. Nothing in it has been executed against Azure.
+- **No automated frontend tests.** The API contract it depends on has 23.
+- **The `evaluate` de-duplication (Phase 15 Step 2) was not done.** The read-time
+  overlay still mirrors `state/machine.evaluate` rather than calling it. It is
+  guarded by a test that runs both over every combination of verdicts, but that is
+  the weaker arrangement and it should be collapsed to one implementation. See
+  "Known broken" below.
 
 ### Provider comparison — qwen2.5:7b-instruct vs deepseek-chat (2026-09-20)
 

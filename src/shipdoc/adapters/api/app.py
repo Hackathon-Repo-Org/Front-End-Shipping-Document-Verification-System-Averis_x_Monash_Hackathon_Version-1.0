@@ -368,6 +368,52 @@ def _register(app: FastAPI) -> None:      # noqa: C901 - a route table, not logi
     def stats(repo=Depends(get_repo)) -> dict:
         return repo.dashboard_stats()
 
+
+    # ------------------------------------------------------ try it yourself
+    MAX_CHARS = 20000
+
+    @app.post("/api/try")
+    def try_it(body: dict) -> dict:
+        """Run ONE pasted email through the real engine. Nothing is stored.
+
+        Open without a passcode, on purpose: this is how a visitor convinces
+        themselves the system does what the dashboard claims, and gating it behind a
+        code they do not have defeats the point. It is safe to leave open because it
+        writes nothing, needs no API key, and is bounded in size.
+
+        Same `Normaliser`, same `compare_all`, same `evaluate` as the batch run. Only
+        ingest and extract are skipped, because the text arrived as text.
+        """
+        subject = str(body.get("subject") or "")[:2000]
+        email_body = str(body.get("body") or "")[:MAX_CHARS]
+        si = str(body.get("si_text") or "")[:MAX_CHARS]
+        bl = str(body.get("bl_text") or "")[:MAX_CHARS]
+        if not (subject or email_body or si or bl):
+            raise HTTPException(422, detail="Paste at least a subject or a body.")
+
+        from shipdoc.config import load_config
+        from shipdoc.pipeline import process_adhoc
+        try:
+            return process_adhoc(subject=subject, body=email_body,
+                                 si_text=si, bl_text=bl,
+                                 cfg=load_config(REPO_ROOT / "config"), llm=None)
+        except Exception as e:  # noqa: BLE001 - a visitor gets a message, not a trace
+            raise HTTPException(
+                500, detail=f"Could not process that input "
+                            f"({type(e).__name__}). The pasted text is not stored, "
+                            f"so nothing was affected.") from None
+
+    @app.get("/api/try/sample")
+    def try_sample() -> dict:
+        """A worked example to prefill the form.
+
+        An empty textarea is a wall. This is a realistic SI/BL pair carrying one
+        planted defect (the discharge port) so a visitor sees the system find
+        something on their first click rather than staring at OK.
+        """
+        from shipdoc.adapters.api.samples import SAMPLE
+        return SAMPLE
+
     # ------------------------------------------------------------ demo reset
     @app.post("/api/demo/reset")
     def reset_demo(repo=Depends(get_repo), _ok=Depends(require_passcode)) -> dict:

@@ -204,7 +204,12 @@ kbd {
   animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+textarea { resize: vertical; width: 100%; font-family: inherit; }
+textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
 @media (max-width: 800px) {
+  .try-split { grid-template-columns: 1fr !important; }
+  .queue-split { grid-template-columns: 1fr !important; }
   .main-layout { flex-direction: column; }
   nav.side { width: 100%; display: flex; gap: .3rem; overflow-x: auto;
     border-right: 0; border-bottom: 1px solid var(--border-color); padding: .5rem; }

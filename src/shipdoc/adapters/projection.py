@@ -127,3 +127,67 @@ def overlay(record: dict, decisions: list[dict]) -> dict:
     out["bypassed_state_rule"] = bypassed
     out["decisions"] = decisions
     return out
+
+
+def record_to_detail(rec, cfg) -> dict:
+    """A live `Record` in the API's detail shape.
+
+    Used by the ad-hoc "try it yourself" path, where there is no database row to read
+    — the record exists only for the duration of one request.
+
+    The external fields (status, review_reason, has_defect) come from
+    `SubmissionAdapter`, NOT from a second computation here. That adapter is the one
+    place that translates the internal vocabulary to the external one, and a copy of
+    that translation in this file is exactly the class of duplication that produced
+    the projection bugs of earlier phases.
+    """
+    from shipdoc.adapters.submission import SubmissionAdapter
+
+    entry = SubmissionAdapter().emit([rec], expected_ids=[rec.email_id])[rec.email_id]
+
+    comparisons = []
+    for name, c in sorted((rec.comparisons or {}).items()):
+        comparisons.append({
+            "field": name,
+            "verdict": c.verdict.value.upper(),
+            "leaning": c.leaning.value.upper() if c.leaning is not None else None,
+            "si_value": getattr(c.si, "raw_text", None),
+            "bl_value": getattr(c.bl, "raw_text", None),
+            "si_evidence": _live_evidence(c.si),
+            "bl_evidence": _live_evidence(c.bl),
+            "strategy": c.strategy,
+            "detail": c.detail,
+        })
+
+    return {
+        "email_id": rec.email_id,
+        "category": entry.get("category"),
+        "status": entry.get("status"),
+        "review_reason": entry.get("review_reason"),
+        "has_defect": bool(entry.get("has_defect")),
+        "defect_fields": entry.get("defect_fields") or [],
+        "awaiting_documents": bool(getattr(rec, "awaiting_docs", False)),
+        "state": rec.state.value if rec.state is not None else None,
+        "reason_key": rec.reason.value if rec.reason is not None else None,
+        "comparisons": comparisons,
+        "events": [{"seq": e.seq, "stage": e.stage, "outcome": e.outcome,
+                    "detail": (e.detail or "")[:400]} for e in (rec.trace or [])],
+        "decisions": [],
+        "attachments": [],
+        "human_decided": False,
+        "bypassed_state_rule": False,
+    }
+
+
+def _live_evidence(fv) -> dict | None:
+    if fv is None:
+        return None
+    src = getattr(fv, "source", None)
+    ev = {"file": getattr(src, "file", None),
+          "locator": getattr(src, "locator", None),
+          "method": getattr(getattr(fv, "method", None), "value", None),
+          "label_seen": getattr(fv, "label_seen", None)}
+    if getattr(fv, "resolved_from", None):
+        ev["resolved_from"] = fv.resolved_from
+        ev["reference_text"] = fv.reference_text
+    return ev

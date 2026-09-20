@@ -18,6 +18,7 @@ const NAV = [
   { to: "/queue", label: "Review queue", icon: "list-check" },
   { to: "/proposals", label: "Label proposals", icon: "tags" },
   { to: "/evaluation", label: "Evaluation", icon: "graph-up" },
+  { to: "/try", label: "Try it yourself", icon: "lightbulb" },
 ];
 
 export function Shell() {

@@ -10,6 +10,7 @@ import { Detail } from "./pages/Detail";
 import { Queue } from "./pages/Queue";
 import { Proposals } from "./pages/Proposals";
 import { Evaluation } from "./pages/Evaluation";
+import { TryIt } from "./pages/TryIt";
 
 const router = createBrowserRouter([
   {
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { path: "queue", element: <Queue /> },
       { path: "proposals", element: <Proposals /> },
       { path: "evaluation", element: <Evaluation /> },
+      { path: "try", element: <TryIt /> },
       { path: "records/:emailId", element: <Detail /> },
     ],
   },

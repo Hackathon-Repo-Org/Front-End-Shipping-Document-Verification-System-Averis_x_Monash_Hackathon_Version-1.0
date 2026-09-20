@@ -27,7 +27,7 @@ rather than reimplemented.
 | Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** | recall **1.000** |
 | **Final** | | **0.9510** | **0.9858** |
 
-All **20/20** planted edge cases correct. 765 tests pass. Two runs produce
+All **20/20** planted edge cases correct. 776 tests pass. Two runs produce
 byte-identical output.
 
 **Two numbers, and the difference is the point.** The left column is the system with
@@ -82,6 +82,80 @@ Ollama also remains the **offline / air-gapped** option — this system runs wit
 outbound network at all, which is a real requirement for a freight operator handling
 commercial documents.
 
+## The web interface
+
+A reviewer UI and a thin HTTP API ship alongside the CLI. **They deploy separately**
+and talk only over HTTP — the frontend is a static bundle on Azure Static Web Apps,
+the backend a container on Azure Container Apps.
+
+**Frontend repository:**
+<https://github.com/Hackathon-Repo-Org/Front-End-Shipping-Document-Verification-System-Averis_x_Monash_Hackathon_Version-1.0>
+
+```powershell
+# backend
+$env:DATABASE_URL="sqlite:///output/shipdoc.db"
+$env:DEMO_PASSCODE="averis2026"
+$env:CORS_ORIGINS="http://localhost:5173"
+python -m shipdoc db seed
+python -m shipdoc
+python -m uvicorn shipdoc.adapters.api.app:app --port 8000
+
+# frontend, in another terminal
+cd ui; npm install; npm run dev        # http://localhost:5173
+```
+
+| Screen | For |
+|---|---|
+| Dashboard | counts, the four axes, the AI's share of decisions, cache-hit rate, run hashes |
+| Inbox | filter and search; **filter state lives in the URL** so a view is shareable |
+| Email detail | seven fields side by side — **click any value to open its source at the highlighted line** |
+| Review queue | keyboard-first (`J`/`K`/`Enter`/`A`/`C`/`E`/`R`/`N`), built for fifty in a row |
+| Label proposals | approve or reject what a model suggested, signed with a name |
+| Evaluation | the four axes and the provider comparison |
+| **Try it yourself** | **paste your own SI and BL and watch the real engine run** |
+
+### Try it yourself
+
+`/try` accepts a pasted shipping instruction and draft bill of lading and runs **the
+real engine** over them — same normaliser, same comparators, same state machine as
+the 520-record batch. Only ingest and extract are skipped, because the text arrived
+as text.
+
+It needs no passcode, **stores nothing**, and uses no API key, so it cannot be made
+to burn credits by being refreshed. "Load a worked example" prefills a realistic pair
+with one planted defect, so the first click finds something instead of returning OK
+and looking broken.
+
+### The API
+
+Thin by construction: every route turns a request into one call on the repository
+interface and back. Two tests enforce it — one parses the handlers with `ast` looking
+for engine vocabulary, one forbids importing `compare/` or `state/`.
+
+`GET /api/health · /api/vocabulary · /api/runs · /api/records · /api/records/{id} ·
+/api/records/{id}/source/{attachment} · /api/proposals · /api/evaluation · /api/stats`
+· `POST /api/records/{id}/decisions · /api/proposals/{id} · /api/try · /api/demo/reset`
+
+**Reads are open; writes need a passcode** sent as the `X-Demo-Passcode` header,
+never a cookie — the two halves are different origins, and a third-party cookie is
+blocked in incognito, which is how a judge opens a link.
+
+**A decision takes effect immediately, with no pipeline re-run.** Decisions carry no
+`run_id`: they are about the email, not one pass over it. The stored run is never
+rewritten; decisions are applied when a record is read, so the audit question "what
+did the system say before a human touched it?" keeps its answer.
+
+## Deployment
+
+`docs/deploy-azure.md` is the copy-paste command sequence, every step marked as
+needing a human or not, with the post-deploy checklist in the order that rules out
+one failure at a time. `SETUP.md` tiers 4–6 cover the database, the container and the
+split deployment in more detail.
+
+The container was rehearsed locally: non-root (uid 10001), port 8000, Tesseract
+present, the LLM cache baked in, and **the full 520-record run completes inside the
+image with no API key and reproduces the published hash.**
+
 ## Quick start
 
 Python 3.12+. Nothing else — no Docker, no GPU, no model download.
@@ -105,7 +179,7 @@ Then:
 ```powershell
 python -m shipdoc                      # full run -> output\
 python -m shipdoc inspect email_013    # one record, seven fields, side by side
-python -m pytest -q                    # 765 tests
+python -m pytest -q                    # 776 tests
 ```
 
 ## Why the model cache is committed
@@ -148,6 +222,9 @@ python -m shipdoc                      # re-queries the model, rewrites the cach
 | **[docs/decisions/](docs/decisions/)** | Why port resolution is off, and why projection rows 2 and 3 were kept — both measured. |
 | **[Dockerfile](Dockerfile)** | The deployable image. Batch job today; the same image becomes the API service later. No secrets in it. |
 | **[.env.example](.env.example)** | Every environment variable this system reads. Keys and connection strings come from the environment only. |
+| **[docs/deploy-azure.md](docs/deploy-azure.md)** | The exact Azure deploy sequence, and the post-deploy checklist. |
+| **[docs/design-notes.md](docs/design-notes.md)** | What the UI adopted from the team's prototype, and what it did not. |
+| **[ui/README.md](ui/README.md)** | The reviewer UI — screens, shortcuts, configuration. |
 
 ## Not built yet
 

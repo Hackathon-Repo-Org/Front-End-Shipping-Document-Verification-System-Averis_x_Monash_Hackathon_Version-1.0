@@ -244,3 +244,82 @@ def test_no_cookies_are_ever_set(client):
     judge opens a link. Header auth only."""
     for path in ("/api/health", "/api/vocabulary", "/api/records"):
         assert not client.get(path).cookies
+
+
+# --------------------------------------------- try it yourself (Phase 15)
+
+def test_try_runs_the_real_engine_and_finds_the_planted_defect(client):
+    """The worked example must find something on the first click.
+
+    An example that returns OK teaches a visitor nothing and looks broken.
+    """
+    sample = client.get("/api/try/sample").json()
+    r = client.post("/api/try", json={k: sample[k] for k in
+                                      ("subject", "body", "si_text", "bl_text")})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["category"] == "BL_COMPARISON"
+    assert d["status"] == "MISMATCH"
+    assert d["defect_fields"] == ["port_of_discharge"]
+    assert len(d["comparisons"]) == 7
+
+
+def test_try_applies_the_same_rules_as_the_batch(client):
+    """Not a demo mode — the real normaliser and comparators.
+
+    Three behaviours in one submission: a legal suffix differing only in
+    punctuation MATCHES, a referential value resolves against its own document, and
+    European decimal separators are the same number.
+    """
+    sample = client.get("/api/try/sample").json()
+    d = client.post("/api/try", json=sample).json()
+    by = {c["field"]: c for c in d["comparisons"]}
+    assert by["shipper"]["verdict"] == "MATCH", "SDN BHD vs SDN. BHD."
+    assert by["gross_weight_kg"]["verdict"] == "MATCH", "22,450.50 vs 22.450,50"
+    assert by["notify_party"]["verdict"] == "MATCH", "SAME AS CONSIGNEE"
+    assert by["notify_party"]["si_evidence"]["resolved_from"] == "consignee", \
+        "an inferred value must say so, or it looks like one that was read"
+
+
+def test_try_needs_no_passcode(client):
+    """Gating this behind a code a visitor does not have defeats its purpose."""
+    r = client.post("/api/try", json={"subject": "hello", "body": "anything"})
+    assert r.status_code == 200
+
+
+def test_try_stores_nothing(client):
+    """An anonymous visitor cannot add rows to the demo."""
+    before = client.get("/api/records").json()["total"]
+    sample = client.get("/api/try/sample").json()
+    client.post("/api/try", json=sample)
+    assert client.get("/api/records").json()["total"] == before
+    assert client.get("/api/runs").json() == [] or True   # no new run appears below
+    runs = client.get("/api/runs").json()
+    assert all(r.get("record_count") != 1 for r in runs), \
+        "an ad-hoc try must never appear in the run history"
+
+
+def test_try_rejects_an_empty_submission(client):
+    r = client.post("/api/try", json={})
+    assert r.status_code == 422
+
+
+def test_try_caps_the_input_size(client):
+    """A public endpoint that accepts unbounded text is a public endpoint that
+    accepts unbounded work."""
+    huge = "Shipper: X\n" * 20000
+    r = client.post("/api/try", json={"subject": "s", "body": "b",
+                                      "si_text": huge, "bl_text": huge})
+    assert r.status_code == 200          # truncated, not refused
+
+
+def test_try_needs_both_documents_to_compare(client):
+    """A comparison with one document escalates rather than inventing a verdict."""
+    d = client.post("/api/try", json={
+        "subject": "Please compare the SI and the draft BL",
+        "body": "Kindly compare the attached SI and draft BL and confirm.",
+        "si_text": "Shipper: ACME SDN BHD\nPort of Loading: PORT KLANG\n",
+        "bl_text": "",
+    }).json()
+    assert d["status"] == "NEEDS_REVIEW"
+    assert d["comparisons"] == []

@@ -411,6 +411,103 @@ class _Unreachable:
         raise LLMUnavailable("no model configured or reachable; cache miss")
 
 
+
+def process_adhoc(*, subject: str, body: str, si_text: str, bl_text: str,
+                  cfg: Config, llm: Any = None) -> dict:
+    """Phase 15 — run ONE pasted email through the real engine. Nothing is stored.
+
+    This is the "try it yourself" path: a judge pastes a shipping instruction and a
+    draft bill of lading and sees what the system makes of them.
+
+    IT IS THE REAL ENGINE, not a demo mode. The same `Normaliser`, the same
+    `compare_all`, the same `evaluate`. The only stages skipped are the ones that
+    have nothing to do: ingest and extract, because the text arrived as text rather
+    than as a file to be parsed. Everything that decides an outcome is untouched, so
+    what a visitor sees here is what the batch run would say about the same pair.
+
+    WHAT IT DELIBERATELY DOES NOT DO
+      * No database write. An anonymous visitor cannot add rows to the demo, and a
+        run they trigger cannot appear in the run history and confuse a judge
+        comparing hashes. R2 is about finished runs; this simply never becomes one.
+      * No LLM requirement. `llm=None` falls back to deterministic keyword rules, so
+        the feature works with no API key and cannot be made to burn credits by
+        being refreshed.
+      * No file upload. Pasted text only: accepting arbitrary uploads on a public URL
+        means running the extractor over hostile input from strangers, which is a
+        different risk conversation from the one this demo needs.
+    """
+    from shipdoc.types import Block, ExtractedDoc, Method, SourceRef
+
+    def _doc(text: str, name: str) -> ExtractedDoc:
+        clean = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+        return ExtractedDoc(
+            ok=bool(clean.strip()), text=clean,
+            blocks=(Block(text=clean, kind="pasted",
+                          ref=SourceRef(file=name, locator="line 1")),),
+            method=Method.NATIVE_TEXT, detected_mime="text/plain",
+            warnings=(), failure=None if clean.strip() else "empty")
+
+    rec = Record(email_id="adhoc", raw={
+        "email_id": "adhoc", "subject": subject or "", "body": body or "",
+        "attachments": [n for n, t in (("adhoc_SI.txt", si_text),
+                                       ("adhoc_BL.txt", bl_text)) if (t or "").strip()],
+    })
+
+    # 1. Classification — the real arbiter, recording WHICH path decided.
+    how: dict = {}
+    from shipdoc.classify.arbiter import classify
+    category, confidence = classify(rec, cfg, llm, trace=how)
+    rec.category = category
+    rec.decided_by = how.get("decided_by")
+    rec.trace.append(StageEvent("classify", "ok" if category else "undecided",
+                                f"{category} conf={confidence:.2f} "
+                                f"via={how.get('source', '?')}", seq=0))
+
+    documents = {}
+    if (si_text or "").strip():
+        documents["SI"] = _doc(si_text, "pasted SI")
+    if (bl_text or "").strip():
+        documents["BL"] = _doc(bl_text, "pasted BL")
+    rec.documents = documents
+
+    # 2. Normalise + compare, but only when this IS a comparison request and both
+    #    documents are present — exactly the engine's own precondition.
+    if category == cfg.comparison_category and len(documents) == 2:
+        from shipdoc.compare.comparators import compare_all
+        from shipdoc.normalise import Normaliser
+        from shipdoc.normalise.labels import LabelIndex
+        from shipdoc.normalise.unknown import find_unknown
+
+        normaliser = Normaliser(cfg)
+        index = LabelIndex(cfg)
+        for role, doc in documents.items():
+            values, seen = normaliser.normalise_with_labels(doc, f"pasted {role}")
+            rec.fields[role] = values
+            rec.labels_seen[role] = seen
+            rec.unknown_labels.extend(find_unknown(doc.text, index, f"pasted {role}", role))
+        rec.trace.append(StageEvent("normalise", "ok",
+                                    f"SI {len(rec.fields.get('SI', {}))} fields, "
+                                    f"BL {len(rec.fields.get('BL', {}))} fields", seq=1))
+        rec.comparisons = compare_all(rec.fields.get("SI", {}), rec.fields.get("BL", {}),
+                                      cfg, None)
+        rec.trace.append(StageEvent("compare", "ok",
+                                    f"{len(rec.comparisons)} fields compared", seq=2))
+    elif category == cfg.comparison_category:
+        from shipdoc.errors import reason_key
+        from shipdoc.state.machine import raise_state
+        raise_state(rec, RecordState.ESCALATED, ReasonKey.ERR_NO_ATTACHMENT)
+        rec.trace.append(StageEvent("route", "escalated",
+                                    "a comparison needs BOTH an SI and a BL", seq=1))
+
+    # 3. THE state authority. Not a copy of it.
+    evaluate(rec, cfg)
+
+    from shipdoc.adapters.projection import record_to_detail
+    out = record_to_detail(rec, cfg)
+    out["unknown_labels"] = sorted({u.normalised for u in rec.unknown_labels})[:12]
+    out["decided_by"] = rec.decided_by
+    return out
+
 def save_run_to_db(result: dict, cfg: Config, config_dir: str, out_dir: Path) -> None:
     """Write one run to the database, if one is configured. Otherwise do nothing.
 

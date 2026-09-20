@@ -47,7 +47,7 @@ Add `--fast` to skip the test-suite check (about 5 seconds instead).
 python -m pytest -q
 ```
 
-**Expected:** `765 passed` in about 50 seconds. Zero failures is the thing that
+**Expected:** `776 passed` in about 50 seconds. Zero failures is the thing that
 matters; the count rises as tests are added.
 
 | Directory | What it covers |
