@@ -1,0 +1,26 @@
+# SECRETS — never in an image. A developer's .env baked in by `COPY . .` is how a
+# deployed service silently points at the wrong database.
+.env
+.env.*
+!.env.example
+
+# Not needed at runtime, and large.
+.git/
+.github/
+BACKUP/
+output/
+output_*/
+.venv/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.egg-info/
+tests/
+docs/
+eval/
+tools/
+
+# The organiser bundle and the answer key live outside this repo; this is belt and
+# braces in case someone copies one in.
+sdoc-server/
+**/ground_truth.json

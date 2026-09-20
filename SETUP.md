@@ -321,6 +321,223 @@ outage must never take down a batch.
 
 ---
 
+## Tier 5 — deploy to Azure: the backend and the database
+
+Everything above runs on a laptop. This tier puts the same image in Azure.
+
+> **What the "backend" is today.** A **batch processor**, not a web service. It reads
+> an inbox, writes a submission and exits. The right Azure primitive for that is a
+> **Container Apps Job**, not a Container App with ingress — a job runs to completion,
+> on a schedule or on demand, and costs nothing while idle. When the HTTP API is
+> built, the *same image* gains an ingress and becomes a Container App; nothing below
+> is thrown away. That change is described in step 9.
+
+### What gets created
+
+| Azure resource | Why | Demo SKU |
+|---|---|---|
+| Resource group | one blast radius | — |
+| Azure Container Registry | somewhere to push the image | Basic |
+| Azure Database for PostgreSQL, Flexible Server | runs, records, decisions | Burstable **B1ms** |
+| Storage account + container | attachment bytes | Standard_LRS |
+| Container Apps environment | where the job runs | Consumption |
+| Container Apps **Job** | the backend | 0.5 vCPU / 1 GiB |
+
+Roughly **USD 15–25/month** if left running; the job itself is billed per second of
+execution. The database is the only thing that costs money while idle — stop it
+between demos with `az postgres flexible-server stop --name $PG --resource-group $RG`.
+
+### 0. Prerequisites
+
+```bash
+az login
+az account set --subscription "<your subscription>"
+az extension add --name containerapp --upgrade
+
+RG=shipdoc-rg
+LOC=southeastasia          # the region nearest your judges/users
+ACR=shipdocacr$RANDOM      # globally unique, lowercase, no dashes
+PG=shipdoc-db-$RANDOM
+STG=shipdocstore$RANDOM
+PGPASS='<a strong password>'
+
+az group create --name $RG --location $LOC
+```
+
+### 1. The database
+
+Full detail, SSL and firewall notes are in **Tier 4a**. The short version:
+
+```bash
+az postgres flexible-server create \
+  --resource-group $RG --name $PG --location $LOC \
+  --tier Burstable --sku-name Standard_B1ms --version 16 \
+  --database-name shipdoc \
+  --admin-user shipdocadmin --admin-password "$PGPASS" \
+  --public-access 0.0.0.0
+```
+
+`--public-access 0.0.0.0` is the **"allow other Azure services"** rule, not public
+internet. It is a demo convenience; production wants a private endpoint.
+
+### 2. Blob storage for attachment bytes
+
+```bash
+az storage account create --name $STG --resource-group $RG \
+  --location $LOC --sku Standard_LRS --min-tls-version TLS1_2
+az storage container create --name shipdoc-attachments --account-name $STG
+```
+
+Keep the container **private**. The database stores the blob URL; a short-lived SAS
+token is minted when a reviewer opens a document. A container with public read on it
+is a customer's commercial documents on the open internet.
+
+### 3. Build and push the image
+
+The `Dockerfile` at the repo root is what you deploy. It carries **no secrets**:
+`.dockerignore` excludes `.env`, and `infra/dotenv.py` lets a real environment
+variable win even if one were somehow baked in.
+
+```bash
+az acr create --resource-group $RG --name $ACR --sku Basic --admin-enabled true
+az acr build --registry $ACR --image shipdoc:v1 .    # builds in Azure; no local Docker needed
+```
+
+> **Build for `linux/amd64`.** Building locally on Apple Silicon without
+> `--platform linux/amd64` produces an image that fails to start with
+> `exec format error` — a message that says nothing about architecture.
+
+### 4. The Container Apps environment and the job
+
+```bash
+az containerapp env create --name shipdoc-env --resource-group $RG --location $LOC
+
+ACR_SERVER=$(az acr show -n $ACR --query loginServer -o tsv)
+ACR_PASS=$(az acr credential show -n $ACR --query "passwords[0].value" -o tsv)
+
+az containerapp job create \
+  --name shipdoc-run --resource-group $RG --environment shipdoc-env \
+  --image $ACR_SERVER/shipdoc:v1 \
+  --registry-server $ACR_SERVER --registry-username $ACR --registry-password "$ACR_PASS" \
+  --trigger-type Manual --replica-timeout 1800 --replica-retry-limit 1 \
+  --cpu 0.5 --memory 1.0Gi \
+  --secrets db-url="postgresql+psycopg://shipdocadmin:$PGPASS@$PG.postgres.database.azure.com:5432/shipdoc?sslmode=require" \
+            deepseek-key="$DEEPSEEK_API_KEY" \
+  --env-vars DATABASE_URL=secretref:db-url DEEPSEEK_API_KEY=secretref:deepseek-key \
+  --command shipdoc --args run,--quiet
+```
+
+**Secrets go in `--secrets` and are referenced with `secretref:`, never passed
+directly in `--env-vars`.** A value passed directly is visible in
+`az containerapp job show`, in the portal, and in shell history.
+
+For a nightly run rather than manual:
+
+```bash
+--trigger-type Schedule --cron-expression "0 2 * * *"
+```
+
+### 5. Migrate and seed — one-off job executions
+
+The schema is owned by Alembic, not by the app. Run it from the **same image**, so
+the migration cannot drift from the code that reads it:
+
+```bash
+az containerapp job start --name shipdoc-run --resource-group $RG \
+  --command alembic --args upgrade,head
+
+az containerapp job start --name shipdoc-run --resource-group $RG \
+  --command shipdoc --args db,seed
+```
+
+Seeding is **idempotent** — every write is keyed on the natural key, so running it
+twice changes nothing. Check with `shipdoc db counts` before and after.
+
+### 6. Run it, and confirm it landed
+
+```bash
+az containerapp job start --name shipdoc-run --resource-group $RG
+az containerapp job execution list --name shipdoc-run --resource-group $RG -o table
+az containerapp logs show --name shipdoc-run --resource-group $RG --type console --follow
+
+az containerapp job start --name shipdoc-run --resource-group $RG \
+  --command shipdoc --args db,check
+# expect: runs=1  records=520  comparisons=798  submissions=1
+```
+
+> ### ⚠️ The firewall is the single most common reason a deployed job cannot reach the DB
+>
+> A Container App's **outbound** IP is not the one shown in the portal overview, and
+> it changes when the app scales or is redeployed. The symptom is a hang and then a
+> timeout — never a clear "denied". `--public-access 0.0.0.0` in step 1 covers it for
+> a demo. For production use a private endpoint or VNet integration; if you must keep
+> an allow-list, pin egress with a NAT gateway so the IP stops moving.
+
+### 7. Which AI model in the cloud
+
+The image ships the committed LLM cache, so **it reproduces the published score with
+no API key and no outbound network.** That is the default, and it is free.
+
+To use a hosted model, change two config values and supply the key as a secret:
+
+```yaml
+# config/pipeline.yaml
+llm:
+  provider: deepseek        # deepseek | openai | together | groq | ollama | none
+  model: deepseek-chat
+```
+
+Measured trade-off on this corpus: DeepSeek costs **0.058 of final score** against
+local qwen (0.9277 vs 0.9858) while needing no GPU and costing cents. The table is in
+[README.md](README.md); the analysis, including a tempting explanation that was
+tested and falsified, is in [HANDOVER.md](HANDOVER.md).
+
+Running Ollama in Azure would need a GPU SKU and is rarely worth it. Ollama's real
+role is the **offline / air-gapped** deployment, not this one.
+
+### 8. Verified, not assumed
+
+The image was built and run before this guide was written:
+
+```
+docker build -t shipdoc:local .              -> succeeds
+docker run --rm shipdoc:local doctor --fast  -> RESULT: PASS - shipdoc is ready
+
+docker run --name r shipdoc:local run --quiet
+docker cp r:/app/output/submission.json .
+  sha256, Linux container : 7ff39d877aef07c862722767fcac44f7da550f08376477e5d54f03ae0eb81195
+  sha256, Windows host    : 7ff39d877aef07c862722767fcac44f7da550f08376477e5d54f03ae0eb81195
+```
+
+**Byte-identical across operating systems.** Not a coincidence: artifacts are written
+with `newline="\n"` pinned precisely so a Linux container and a Windows laptop
+publish the same hash. Before that fix they did not, and the discrepancy would have
+surfaced during judging rather than here.
+
+> **Mounting a host volume onto `output/`?** The container runs as uid **10001**
+> (non-root, deliberately). A host directory owned by another user gives
+> `Permission denied` on the temp file. Either `chown` it to 10001, run with
+> `--user "$(id -u)"`, or better — read results from the database instead of a file.
+
+### 9. When the HTTP API lands
+
+Nothing here is wasted. The API is the same image with a different entrypoint:
+
+```bash
+az containerapp create --name shipdoc-api --resource-group $RG \
+  --environment shipdoc-env --image $ACR_SERVER/shipdoc:v1 \
+  --ingress external --target-port 8000 \
+  --min-replicas 1 --max-replicas 3 \
+  --secrets db-url="..." --env-vars DATABASE_URL=secretref:db-url
+```
+
+The job stays, for batch re-processing. The API reads the same database through the
+same narrow repository interface (`src/shipdoc/adapters/db/repository.py`) — which is
+why it can be a thin translation layer rather than a second place where the rules
+live.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -337,10 +554,24 @@ outage must never take down a batch.
 
 ## What you get at each tier
 
-| | Tier 1 | +OCR | +LLM |
-|---|---|---|---|
-| Read `.txt` `.pdf` `.xlsx` `.docx` | yes | yes | yes |
-| Compare all 7 fields | yes | yes | yes |
-| Classify emails | keyword rules | keyword rules | model |
-| Read the 3 scanned PDFs | no — `NEEDS_REVIEW` | yes | yes |
-| Score against the server | needs Tier 3b | | |
+| | T1 | +OCR | +LLM | +hosted | +DB | +Azure |
+|---|---|---|---|---|---|---|
+| Read `.txt` `.pdf` `.xlsx` `.docx` | yes | yes | yes | yes | yes | yes |
+| Compare all 7 fields | yes | yes | yes | yes | yes | yes |
+| Reproduce the published score | yes | yes | yes | yes | yes | yes |
+| Classify emails | keyword rules | keyword rules | local model | hosted model | — | — |
+| Read the 3 scanned PDFs | no — `NEEDS_REVIEW` | yes | yes | yes | — | — |
+| Score against the server | needs Tier 3b | | | | | |
+| Runs with **no outbound network** | yes | yes | yes | no | — | no |
+| Needs a GPU | no | no | yes* | no | — | no |
+| Durable runs, review history | no | no | no | no | yes | yes |
+| Runs unattended / on a schedule | no | no | no | no | no | yes |
+
+\* Ollama runs on CPU, slowly. A GPU is what makes Tier 3 practical for 520 emails.
+
+**The committed LLM cache is why every tier reproduces the published score** — even
+Tier 1 with no model, no key and no network. The cache holds this system's own
+answers from both providers, keyed by model name.
+
+**Most people need Tier 1.** Tier 4 and 5 exist because the brief asks for cloud and
+a database; they change nothing about the verification result.

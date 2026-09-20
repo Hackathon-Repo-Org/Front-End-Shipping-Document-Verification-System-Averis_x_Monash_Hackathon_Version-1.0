@@ -27,7 +27,7 @@ rather than reimplemented.
 | Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** | recall **1.000** |
 | **Final** | | **0.9510** | **0.9858** |
 
-All **20/20** planted edge cases correct. 711 tests pass. Two runs produce
+All **20/20** planted edge cases correct. 737 tests pass. Two runs produce
 byte-identical output.
 
 **Two numbers, and the difference is the point.** The left column is the system with
@@ -47,6 +47,40 @@ it is a fact about that corpus rather than a property of the system — on three
 hand-written adversarial emails the same build reported four false defects before
 Phase 10 and two after, both of which are the known bare-UN/LOCODE case. Those three
 emails now live in `tests/fixtures/adversarial/` and run in CI alongside the 520.
+
+## Which AI model — measured, not assumed
+
+The classifier sits behind a one-method protocol, so the provider is a config line.
+Both were run over the same corpus with the same prompts; cache keys include the
+model name, so the hosted run missed every local entry and genuinely re-queried.
+
+| | `qwen2.5:7b-instruct` (local, Ollama) | `deepseek-chat` (hosted) |
+|---|---|---|
+| Stage 1 — macro-F1 | **0.9526** | 0.7591 |
+| Stage 3 — defect-F1 | 1.0000 | 1.0000 |
+| End-to-end | 46/46 | 46/46 |
+| **Final score** | **0.9858** | **0.9277** |
+| Attachment-free 394 (macro-F1) | **0.9425** | 0.7246 |
+| Replies not in the closed vocabulary (of 33) | 23 | **0** |
+| Cost | free, needs a GPU | cents, no GPU |
+
+**The counterintuitive part is the useful part.** DeepSeek is much better at
+*following the format* — zero malformed replies against qwen's 23, no echoing the
+label back, no inventing field names — and much worse at *this corpus's category
+boundary*: it calls 106 `SI_REQUEST` emails `BL_COMPARISON`, where qwen gets 124 of
+125 right.
+
+The prompt was developed against qwen and never adapted for DeepSeek. Rewriting it
+until the hosted number improves would be tuning against the answer key, so it was
+not done — the finding is reported instead. Full analysis, including a tempting
+explanation that was **tested and falsified**, is in
+[HANDOVER.md](HANDOVER.md) under *Provider comparison*.
+
+**`qwen2.5:7b-instruct` ships as the default.** DeepSeek is one config line away and
+is the right choice for a GPU-less deployment that accepts 0.058 of final score.
+Ollama also remains the **offline / air-gapped** option — this system runs with no
+outbound network at all, which is a real requirement for a freight operator handling
+commercial documents.
 
 ## Quick start
 
@@ -71,7 +105,7 @@ Then:
 ```powershell
 python -m shipdoc                      # full run -> output\
 python -m shipdoc inspect email_013    # one record, seven fields, side by side
-python -m pytest -q                    # 711 tests
+python -m pytest -q                    # 737 tests
 ```
 
 ## Why the model cache is committed
@@ -106,17 +140,21 @@ python -m shipdoc                      # re-queries the model, rewrites the cach
 
 | File | For |
 |---|---|
-| **[SETUP.md](SETUP.md)** | Installing, in three tiers. Most people need only Tier 1. |
+| **[SETUP.md](SETUP.md)** | Installing, in five tiers — laptop, OCR, LLM, database, Azure. Most people need only Tier 1. |
 | **[TESTING.md](TESTING.md)** | Testing and inspecting, in six levels, without needing to understand the system. |
 | **[HANDOVER.md](HANDOVER.md)** | Current state, what changed, what is known broken. |
 | **[docs/spec/](docs/spec/)** | The architecture specification and its patches. |
 | **[docs/reports/](docs/reports/)** | Corpus survey, scoring-rubric analysis. |
 | **[docs/decisions/](docs/decisions/)** | Why port resolution is off, and why projection rows 2 and 3 were kept — both measured. |
+| **[Dockerfile](Dockerfile)** | The deployable image. Batch job today; the same image becomes the API service later. No secrets in it. |
+| **[.env.example](.env.example)** | Every environment variable this system reads. Keys and connection strings come from the environment only. |
 
 ## Not built yet
 
-No API, no web UI, no cloud deployment, no database — everything is files on disk and a
-CLI. `python -m shipdoc inspect` is the view a UI would wrap rather than replace.
+No API and no web UI yet — everything is files on disk and a CLI.
+**Cloud and database are built**: a PostgreSQL adapter, Alembic migrations, blob
+storage for attachments and a verified container image, all optional and all off by
+default (SETUP.md tiers 4 and 5). `python -m shipdoc inspect` is the view a UI would wrap rather than replace.
 
 UN/LOCODE port-code resolution is built, tested and **switched off**: measured against
 the answer key it destroyed more real defect detections than it created, because this
