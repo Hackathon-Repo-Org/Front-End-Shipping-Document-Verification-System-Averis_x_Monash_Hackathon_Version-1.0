@@ -109,13 +109,52 @@ load time and `test_value_alias_entry_is_rejected` proves it over six spellings.
 hand-written `anti_synonym`, and one label approved for two different fields.
 
 ⚠️ **The four entries currently in `config/learned_labels.yaml` have not been
-reviewed by a human.** They were proposed by a stub model (Ollama is not installed on
-the build machine) and approved by the demo script that proved the loop. Their
-`approved_by` says `claude-opus-5:phase11-demo` and their `note` says the same. The
-mappings are four spellings of *total gross weight* and are almost certainly right —
-they take end-to-end from 43/46 to 46/46 — but the design says a person approves.
-**Review them, re-approve under your own name, or delete the file.** Deleting it
-returns the system to `0.9510` byte-for-byte; that is verified, not assumed.
+reviewed by a human.** They were approved by the demo script that proved the loop, so
+their `approved_by` reads `claude-opus-5:phase11-demo` and their `note` says the same.
+
+They were first proposed by a stub, because Ollama was installed but not running at
+the time. It has since been started and **the real `qwen2.5:7b-instruct` proposed the
+same four spellings independently** (see the section below), so the mappings are well
+evidenced — and they take end-to-end from 43/46 to 46/46. But evidence is not
+approval. The design says a person approves, and no person has.
+
+**How to clear it** (verified end to end, not assumed):
+
+```powershell
+Remove-Item config\learned_labels.yaml     # nothing else learned is in there
+python -m shipdoc                          # the four are unknown again -> re-proposed
+python -m shipdoc labels list              # 9 pending: the 4 good, the 5 wrong ones
+python -m shipdoc labels approve "TOTAL GROSS WEIGHT"        --by "your.name"
+python -m shipdoc labels approve "TOTAL Gross Weight (KG)"   --by "your.name"
+python -m shipdoc labels approve "TOTAL Gross Wt (kgs)"      --by "your.name"
+python -m shipdoc labels approve "TOTAL Gross WeightII(KGS)" --by "your.name"
+python -m shipdoc labels reject  "Commodity ()"              --by "your.name"
+   …and the other four wrong ones
+```
+
+Run against a scratch config this produced exactly four active entries naming a real
+person, zero superseded, and the identical submission hash `676d2fc4` — so the
+attribution changes and the behaviour does not.
+
+**A gap worth knowing about.** `labels approve` only acts on a **pending** proposal,
+so it cannot re-approve a label that is already in the vocabulary:
+
+```
+$ python -m shipdoc labels approve "TOTAL GROSS WEIGHT" --by "your.name"
+shipdoc: no pending proposal for 'TOTAL GROSS WEIGHT'      (exit 2)
+```
+
+Hence the `Remove-Item` first — deleting the file returns the labels to the unknown
+pool and the normal loop re-proposes them. (The LLM cache already holds those
+answers, so this needs no Ollama and takes seconds.) Editing `approved_by` in the
+YAML by hand is equally valid; the file is designed to be human-editable and the
+loader validates whatever it finds.
+
+Supersession still matters for the ordinary case — changing your mind about a label
+that is *back in the queue*. `_append_entry` keeps at most one active entry per label
+and moves the retired one to `superseded:`, which the loader ignores.
+
+Deleting the file and stopping there returns the system to `0.9510` byte-for-byte.
 
 ### What the real model actually proposed — and why the gate is load-bearing
 
