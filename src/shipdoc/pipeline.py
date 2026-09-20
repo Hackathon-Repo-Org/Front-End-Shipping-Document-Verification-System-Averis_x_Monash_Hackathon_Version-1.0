@@ -124,8 +124,10 @@ def stage_confirm(rec: Record, cfg: Config) -> Record:
 def stage_normalise(rec: Record, cfg: Config) -> Record:
     normaliser = _CTX["normaliser"]
     for role, doc in rec.documents.items():
-        rec.fields[role] = normaliser.normalise(
+        values, seen = normaliser.normalise_with_labels(
             doc, _CTX["roles"][rec.email_id].get(role, role))
+        rec.fields[role] = values
+        rec.labels_seen[role] = seen
     return rec
 
 

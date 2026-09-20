@@ -242,14 +242,46 @@ def test_cardinality_property_holds_for_every_compared_record(run, cfg):
             assert set(rec.comparisons) == set(cfg.fields), eid
 
 
-def test_si_present_bl_absent_is_a_mismatch_not_an_unknown(cfg):
-    """The SI is authoritative: a field the carrier omitted is a defect."""
+def test_si_present_bl_omits_the_value_is_a_mismatch_not_an_unknown(cfg):
+    """The SI is authoritative: a field the carrier OMITTED is a defect.
+
+    PHASE 10 — this test was rewritten, and the rewrite is the point.
+
+    It used to pass an empty BL map and assert MISMATCH, which encoded a two-state
+    model: either we have a value or we do not. That conflated "the carrier left this
+    blank" with "we could not find a label for it", and the second is a fact about
+    our own synonym list. On email_999 it produced a confident defect against a BL
+    field that was character-identical to the SI, because the label happened to read
+    `Containers:` and that string was not in the list.
+
+    The authoritative-SI rule is unchanged and still asserted below; what changed is
+    that it now requires evidence that the BL was actually ASKED the question. See
+    `test_si_present_bl_label_never_found_is_caution` for the other half.
+    """
+    from shipdoc.types import FieldValue, Method, SourceRef
+    si = {"consignee": FieldValue("consignee", "ACME LTD", "ACME LTD",
+                                  SourceRef("f", "line 1"), Method.NATIVE_TEXT, "Consignee:")}
+    # The label WAS found on the BL; the value behind it is a sentinel.
+    bl = {"consignee": FieldValue("consignee", "N/A", None,
+                                  SourceRef("g", "line 1"), Method.NATIVE_TEXT, "Consignee:")}
+    out = compare_all(si, bl, cfg)
+    assert out["consignee"].verdict is Verdict.MISMATCH
+    assert out["consignee"].leaning is None
+
+
+def test_si_present_bl_label_never_found_is_caution(cfg):
+    """The other half of the three-state rule: an extraction miss is not a defect.
+
+    `leaning` must stay None. A leaning of MISMATCH here would project the record
+    into `suspected` and re-manufacture the same false positive one layer up.
+    """
     from shipdoc.types import FieldValue, Method, SourceRef
     si = {"consignee": FieldValue("consignee", "ACME LTD", "ACME LTD",
                                   SourceRef("f", "line 1"), Method.NATIVE_TEXT, "Consignee:")}
     out = compare_all(si, {}, cfg)
-    assert out["consignee"].verdict is Verdict.MISMATCH
+    assert out["consignee"].verdict is Verdict.CANNOT_DETERMINE
     assert out["consignee"].leaning is None
+    assert "extraction miss" in out["consignee"].detail
 
 
 def test_grey_band_is_cannot_determine_leaning_mismatch(cfg):

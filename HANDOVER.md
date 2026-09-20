@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9510.** Suite 553 passed, 0 failed. Output deterministic. The next work —
+**Score 0.9510.** Suite 577 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
@@ -76,6 +76,43 @@ Progression: **0.8582 → 0.9510**.
 - **Documentation:** invariant I3 says a value must appear "word for word in the
   source document". It is really "in the text extracted from the document". The docx
   case is exactly where that distinction bit. Worth correcting in the spec.
+
+### Found in Phase 10 (2026-09-20), not fixed
+
+- **Container SIZE is not a compared field — a modelling gap, not a bug.**
+  `tests/fixtures/adversarial/email_997` carries `2 x 40'HC` on the SI and
+  `2 x 4O'HC` on the BL — a letter **O** where the zero should be. We report `match`,
+  and that verdict is *correct for the field as defined*: `container_count` is the
+  count, and the count is 2 on both sides. A human would catch this instantly,
+  because the corrupted token is the container **size**, which the system does not
+  model at all.
+
+  This is a field-definition change, not a patch to the count comparator: it means
+  adding an eighth compared field with its own normaliser (`40'HC`, `40HC`, `40 HC`,
+  `40 HIGH CUBE` are the same thing) and its own homoglyph handling (`O`→`0`, `l`→`1`,
+  `S`→`5` are the ones that occur in scanned and retyped documents). Doing it inside
+  `container_count` would mean one field with two meanings and a verdict that cannot
+  say which half disagreed.
+
+  Worth doing, and worth showing: it is a clean example of the difference between a
+  system that is right about what it measures and a system that measures the right
+  thing.
+
+- **The awaiting-documents rule cannot see negation.** `_EXPECTED_PRESENT` in
+  `classify/intent.py` matches `\battach\w*\b`, which fires on "I forgot to **attach**
+  the files" — a sender saying the documents are *absent* and coming later. On
+  `email_998` this makes the record `missing_attachment` rather than awaiting-docs.
+  The outcome is defensible (an urgent audit request with nothing to audit does
+  belong in front of a human) but it is reached for the wrong reason.
+
+  Not fixed deliberately: `_EXPECTED_PRESENT` is load-bearing for the 20/20 planted
+  edge cases, and tuning it against one synthetic email is how a measured result
+  becomes an unmeasured one. `test_998_awaiting_docs_rule_now_runs_and_declines`
+  pins the current behaviour so a future change to it has to be deliberate.
+
+- **Two false positives on bare UN/LOCODE ports** (`MYTPP` vs `TANJUNG PELEPAS`).
+  String comparison cannot fix these at any threshold. Recorded as the third data
+  point in `docs/decisions/port-resolution.md`; the flag stays off.
 
 ---
 

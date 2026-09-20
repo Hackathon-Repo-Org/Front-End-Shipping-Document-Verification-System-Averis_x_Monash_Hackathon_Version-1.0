@@ -47,6 +47,54 @@ _EXPECTED_PRESENT = tuple(re.compile(p, re.IGNORECASE) for p in (
 ))
 
 
+# ---------------------------------------------------------------- Phase 10 Fix 3
+#
+# An explicit instruction IN THE BODY to compare a BL against an SI. The subject line
+# cannot overturn this, and this rule reads the body ONLY — deliberately, because the
+# failure it fixes is a subject that describes a different matter in the same thread.
+#
+# email_998's subject is `URGENT: INVOICE DISPUTE & REMITTANCE ADVICE`; its body says
+# "Please immediately audit the draft Bill of Lading against our SI". The subject won,
+# the record was classified INVOICE_QUERY, and every downstream stage was skipped.
+# Real email works the other way round: subjects are stale, bodies are current.
+#
+# The rule is deliberately NARROW — all three parts must be present:
+#   1. a comparison verb
+#   2. a bill of lading
+#   3. an SI, or the word "against" (which makes it a two-document instruction)
+# Two of the three is not enough. "Please check the BL" alone is a request to look at
+# one document, which is not this category, and a rule that fired on it would trade a
+# recall gain for a precision loss on an axis worth 0.30.
+_CMP_VERB = r"(?:compare|cross-?check|reconcile|verify|audit|check|confirm|review)"
+_BL_DOC = r"(?:draft\s+)?(?:b/?l\b|bills?\s+of\s+lading\b|bill\s+of\s+lading\b)"
+_SI_DOC = r"(?:s/?i\b|shipping\s+instructions?\b|shipping\s+instruction\b|booking\s+note\b)"
+
+_COMPARE_INSTRUCTION = tuple(re.compile(p, re.IGNORECASE) for p in (
+    # "audit the draft Bill of Lading against our SI"
+    rf"\b{_CMP_VERB}\b[^.]{{0,60}}\b{_BL_DOC}[^.]{{0,40}}\bagainst\b",
+    rf"\b{_CMP_VERB}\b[^.]{{0,60}}\b{_BL_DOC}[^.]{{0,60}}\b{_SI_DOC}",
+    # "compare our SI against the draft BL" — the other order
+    rf"\b{_CMP_VERB}\b[^.]{{0,60}}\b{_SI_DOC}[^.]{{0,60}}\b{_BL_DOC}",
+    # "the BL does not match our shipping instruction"
+    rf"\b{_BL_DOC}[^.]{{0,50}}\b(?:does\s+not|doesn't|do\s+not|don't)\s+match\b"
+    rf"[^.]{{0,40}}\b{_SI_DOC}",
+))
+
+
+def requests_bl_comparison(record) -> bool:
+    """True when the BODY explicitly instructs a BL/SI comparison.
+
+    BODY ONLY. Passing the subject in here would reintroduce exactly the failure this
+    rule exists to fix, and would also let a forwarded subject chain trigger it.
+
+    Deterministic and inspectable: no model, no threshold, no score. A reviewer who
+    disagrees with an outcome can read the four patterns above and see which one
+    fired.
+    """
+    body = (record.raw.get("body") or "")[:BODY_CHARS]
+    return any(p.search(body) for p in _COMPARE_INSTRUCTION)
+
+
 def awaiting_documents(record) -> bool:
     """True when the sender is ASKING for the draft, not supplying it.
 

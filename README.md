@@ -27,8 +27,14 @@ rather than reimplemented.
 | Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** |
 | **Final** | | **0.9510** |
 
-All **20/20** planted edge cases correct. 553 tests pass. Two runs produce
+All **20/20** planted edge cases correct. 577 tests pass. Two runs produce
 byte-identical output.
+
+**On that precision of 1.000:** it is measured on the provided 520-email corpus, and
+it is a fact about that corpus rather than a property of the system — on three
+hand-written adversarial emails the same build reported four false defects before
+Phase 10 and two after, both of which are the known bare-UN/LOCODE case. Those three
+emails now live in `tests/fixtures/adversarial/` and run in CI alongside the 520.
 
 ## Quick start
 
@@ -53,7 +59,7 @@ Then:
 ```powershell
 python -m shipdoc                      # full run -> output\
 python -m shipdoc inspect email_013    # one record, seven fields, side by side
-python -m pytest -q                    # 553 tests
+python -m pytest -q                    # 577 tests
 ```
 
 ## Why the model cache is committed

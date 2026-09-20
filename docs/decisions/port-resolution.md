@@ -156,3 +156,42 @@ it is a straight loss.
 Verify against all 16 cases in the bucket tables above before trusting it.
 
 **The flag stays `false` until both rules are implemented and re-measured.**
+
+---
+
+## Third data point — the bare-LOCODE case (Phase 10, 2026-09-20)
+
+The 520-email corpus never writes a port as a code *alone*. `email_999`, one of the
+hand-written adversarial fixtures in `tests/fixtures/adversarial/`, does:
+
+| Field | SI | BL | We report | Correct |
+|---|---|---|---|---|
+| `port_of_loading` | `TANJUNG PELEPAS (MYTPP)` | `MYTPP` | MISMATCH, similarity 0.300 | match |
+| `port_of_discharge` | `NAGOYA, JAPAN (JPNGO)` | `JPNGO` | MISMATCH, similarity 0.545 | match |
+
+Two false positives, and **string comparison cannot ever fix them.** `MYTPP` and
+`TANJUNG PELEPAS` share almost no characters; no threshold reachable from here
+separates this pair from a genuine defect. This is the first evidence we have of a
+case where resolution is not merely *better* but *necessary*.
+
+It does not change the decision. The measured cost on the 520 stands — 15 real
+detections destroyed against 14 gained — and one synthetic email does not outweigh
+it. What it changes is the shape of the argument:
+
+- Rules 1 and 2 above were written to stop resolution *breaking* the name/code
+  contradiction cases. This case shows the other side of the ledger, and it is a
+  case the current design has no path to at all.
+- Under Rule 2 as written ("resolution may only ADD information") this pair is a
+  clean gain: the string comparison already says MISMATCH, so resolving `MYTPP` to
+  Tanjung Pelepas can only move it to MATCH, never to a loss.
+- Under Rule 1 it is also safe: the BL side carries a code and no name, so it cannot
+  contradict itself, and the SI side's name and code agree.
+
+So this is a case both rules already handle correctly. It strengthens the fix
+direction rather than complicating it.
+
+`tests/integration/test_adversarial.py::test_999_bare_locodes_match_their_named_ports`
+is marked `xfail(strict=True)` against exactly this behaviour. If someone flips
+`flags.port_resolution_enabled`, that test flips from expected-fail to unexpected-pass
+and the suite fails — which forces this document to be read before the flag moves,
+rather than after.

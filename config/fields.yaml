@@ -71,11 +71,32 @@ fields:
     type: integer
     required: true
     extract: '(\d+)\s*x\s*\d+'
+    # Phase 10. A bare `Containers:` on email_999's BL was not in this list, so the
+    # value was never extracted and the comparator reported a defect against a
+    # character-identical SI value. The list is longer now and it is STILL
+    # incomplete — that is the nature of a synonym list. The real fix is in
+    # compare/comparators.py::_missing, where an unmatched label now yields
+    # CANNOT_DETERMINE instead of a fabricated MISMATCH. This list only reduces how
+    # often that caution is needed.
+    #
+    # `Container No:` and friends are excluded explicitly: a bare `Container` prefix
+    # would otherwise swallow the container NUMBER line, which is on almost every
+    # bill of lading, and extract a count from a serial.
+    anti_synonyms:
+      - "Container Numbers:"
+      - "Container Number:"
+      - "Container Seal No:"
+      - "Container Nos:"
+      - "Container No:"
     synonyms:
       - "No. of Containers or Packages:"
+      - "Container Quantity:"
       - "No. of Containers:"
       - "Total Containers:"
       - "Container Count:"
+      - "Container Qty:"
+      - "No. of Units:"
+      - "Containers:"
 
   gross_weight_kg:
     type: quantity

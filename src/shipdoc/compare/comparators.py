@@ -10,7 +10,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Callable
 
-from shipdoc.normalise import AMBIGUOUS
+from shipdoc.normalise import AMBIGUOUS, UNRESOLVED_REFERENCE
 from shipdoc.types import (
     Comparison,
     Config,
@@ -42,17 +42,50 @@ def _missing(si, bl, spec, strategy) -> Comparison | None:
     carrier omitted is a DEFECT, not an uncertainty. v1.0 treated si=None and bl=None
     identically, which scored a real omission as `NEEDS_REVIEW`.
 
+    PHASE 10 — THREE STATES, NOT TWO. "We could not find the label" is not "the
+    carrier omitted the value", and conflating them fabricates a defect out of our
+    own incomplete synonym list. email_999's BL reads `Containers: 3 x 40'HC`, which
+    is character-identical to the SI; `Containers:` was simply not in the synonym
+    list, and the system reported a defect on two values that agree.
+
+      key present, normalised set   -> compare normally (this returns None)
+      key present, normalised None  -> the label WAS found and the value is blank or
+                                       a sentinel: the BL genuinely omits it, and the
+                                       SI is authoritative -> MISMATCH
+      key ABSENT                    -> no label for this field was found in the
+                                       document at all, or the harvested value failed
+                                       T3 verification. Either way this is an
+                                       EXTRACTION MISS, a fact about us and not about
+                                       the carrier -> CANNOT_DETERMINE -> NEEDS_REVIEW
+
+    The synonym list will always be incomplete. The point of the third state is that
+    an incomplete list now produces caution instead of a confident lie.
+
     `leaning` stays None on every branch here: nothing was obtained, so there is no
-    view to commit to (patch 02 §3).
+    view to commit to (patch 02 §3). In particular the extraction-miss branch must
+    NOT lean MISMATCH — we have no evidence of a discrepancy, only of our own silence.
     """
+    # Phase 10 Fix 2. A pointer we could not follow is an uncertainty, and it must be
+    # read BEFORE the asymmetric-presence rules — otherwise it falls through to
+    # `normalised is None` and is reported as a confident omission.
+    for side, fv in (("SI", si), ("BL", bl)):
+        if fv is not None and fv.label_seen == UNRESOLVED_REFERENCE:
+            return Comparison(spec.name, Verdict.CANNOT_DETERMINE, si, bl, strategy,
+                              f"{side} value refers to another field "
+                              f"({fv.raw_text.strip()[:40]!r}) that could not be "
+                              f"resolved on that document", leaning=None)
+
     si_has = si is not None and si.normalised is not None
     bl_has = bl is not None and bl.normalised is not None
     if si_has and bl_has:
         return None
+    if si_has and bl is None:
+        return Comparison(spec.name, Verdict.CANNOT_DETERMINE, si, bl, strategy,
+                          f"no {spec.name} label found in the BL — extraction miss, "
+                          f"not a confirmed omission", leaning=None)
     if si_has and not bl_has:
-        why = "sentinel" if (bl is not None) else "absent"
         return Comparison(spec.name, Verdict.MISMATCH, si, bl, strategy,
-                          f"SI present, BL {why} — SI is authoritative", leaning=None)
+                          "SI present, BL sentinel — SI is authoritative", leaning=None)
     return Comparison(spec.name, Verdict.CANNOT_DETERMINE, si, bl, strategy,
                       "no SI reference to compare against", leaning=None)
 

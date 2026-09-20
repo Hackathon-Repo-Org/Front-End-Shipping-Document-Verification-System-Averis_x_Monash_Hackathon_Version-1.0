@@ -47,7 +47,7 @@ Add `--fast` to skip the test-suite check (about 5 seconds instead).
 python -m pytest -q
 ```
 
-**Expected:** `553 passed` in about 50 seconds. Zero failures is the thing that
+**Expected:** `577 passed` in about 50 seconds. Zero failures is the thing that
 matters; the count rises as tests are added.
 
 | Directory | What it covers |
@@ -135,6 +135,54 @@ Add `--no-llm` to any of these to skip the model.
 
 **What a difference means:** if a field shows `unknown` where you expected `match`,
 read the `detail` line under it — it names the threshold or the reason.
+
+---
+
+## Level 3b — "Does it hold up on emails it has never seen?"
+
+The 520-email corpus is the only data the system was built against, so every number
+on this page is a fact about *that corpus*. `tests/fixtures/adversarial/` holds three
+hand-written emails that attack the seams it does not test. They are **synthetic and
+ours** — not from the organisers, and with no official answer key.
+
+```powershell
+python -m shipdoc --source tests\fixtures\adversarial --out output_adversarial
+python -m shipdoc inspect email_997 --source tests\fixtures\adversarial
+```
+
+They also run as assertions in the normal suite:
+
+```powershell
+python -m pytest tests/integration/test_adversarial.py -q
+```
+
+**Expected:** `19 passed, 1 xfailed`. The xfail is deliberate and `strict` — it is the
+bare-UN/LOCODE case, which only passes if someone flips the port-resolution flag, and
+strict mode makes that flip fail the suite so the decision document gets read first.
+
+What they caught, and what each one now shows on screen:
+
+| Email | The trap | Result |
+|---|---|---|
+| 997 | `NOTIFY PARTY: SAME AS CONSIGNEE` | resolves against that document's own consignee; `inspect` prints *"SI said 'SAME AS CONSIGNEE' — value taken from this document's consignee"* |
+| 997 | `22,450.50` vs `22.450,50` | same quantity, European separators |
+| 997 | POL and POD **swapped** | both caught — the genuine defect |
+| 998 | subject says INVOICE, body says audit the BL | body wins |
+| 999 | BL label reads bare `Containers:` | extracted; previously a false defect against an identical value |
+| 999 | BL `NET WEIGHT` = SI's `GROSS WEIGHT` | refused — the anti-synonym list holds |
+
+`inspect` now also distinguishes the two ways a field can be blank, which is the
+difference a reviewer needs and could not previously see:
+
+```
+  gross_weight_kg    unknown    45,120.00 KGS                  —
+                                no gross_weight_kg label found in the BL —
+                                extraction miss, not a confirmed omission
+                                BL: no label matching gross_weight_kg was found
+```
+
+"We could not find the label" is a fact about our synonym list; "the carrier left it
+blank" is a fact about the document. Only the second is a defect.
 
 ---
 

@@ -99,6 +99,29 @@ def run(email_id: str, source: str = "dataset", config_dir: str = "config",
         print(f"  {name:<{W_FIELD}} {label:<10} {si:<{W_VAL}} {bl}")
         if c.verdict is not Verdict.MATCH:
             print(f"  {'':<{W_FIELD}} {'':<10} {_truncate(c.detail, 58)}")
+        # Phase 10 Fix 2. Never let a substituted value look like a read one.
+        for role, fv in (("SI", c.si), ("BL", c.bl)):
+            if fv is not None and fv.resolved_from:
+                print(f"  {'':<{W_FIELD}} {'':<10} "
+                      f"{role} said {fv.reference_text.strip()[:34]!r} — value taken "
+                      f"from this document's {fv.resolved_from}")
+
+        # Phase 10. Where a side produced no value, say whether we FOUND the label
+        # and distrusted the value, or never found a label at all. Those are two
+        # different problems with two different fixes — one is the document's, one
+        # is ours — and a reviewer cannot tell them apart from a blank cell.
+        for role, fv in (("SI", c.si), ("BL", c.bl)):
+            if fv is not None:
+                continue
+            seen = rec.labels_seen.get(role)
+            if seen is None:
+                continue
+            if name in seen:
+                note = f"{role}: label found, but the value failed verification"
+            else:
+                note = f"{role}: no label matching {name} was found in this document"
+            print(f"  {'':<{W_FIELD}} {'':<10} {note}")
+
         ev = []
         if c.si is not None:
             ev.append(f"SI {c.si.source.file}:{c.si.source.locator}")

@@ -35,6 +35,22 @@ def classify(record: Record, cfg: Config, llm) -> tuple[str | None, float]:
             return structural.category, structural.confidence
         return semantic, min(conf, 0.6)
 
+    # Phase 10 Fix 3 — a deterministic body-intent rule, AHEAD of the model.
+    #
+    # Placed after the structural check and before the semantic one, on purpose. An
+    # attachment pair is a fact about the email and keeps its precedence; the model
+    # is a guess informed by the whole text, including a subject line that may
+    # describe a different matter in the same thread. An explicit written instruction
+    # to compare a BL against an SI sits between the two: weaker than a fact, stronger
+    # than an inference.
+    #
+    # It can only ever ADD records to the comparison category, never remove them, so
+    # its risk is one-directional and was measured as such.
+    from shipdoc.classify.intent import requests_bl_comparison
+
+    if requests_bl_comparison(record):
+        return cfg.comparison_category, 0.9
+
     # No structural view: this is the attachment-free residue, ~76% of the corpus.
     semantic, conf = classify_semantic(record, cfg, llm)
     if semantic is not None:

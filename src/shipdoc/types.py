@@ -104,6 +104,20 @@ class FieldValue:
     source:     SourceRef
     method:     Method
     label_seen: str
+    # Phase 10. Set when this value was not read from its own line but SUBSTITUTED
+    # from another field on the same document, because the document said
+    # `SAME AS CONSIGNEE` or carried a ditto mark. It names the field the value came
+    # from. A reviewer must be able to see that the system supplied a value rather
+    # than read one.
+    #
+    # When this is set, `raw_text` holds the SUBSTITUTED value and `reference_text`
+    # holds the pointer as the document actually wrote it. The substitution is made
+    # in `raw_text` rather than only in `normalised` because the party comparator
+    # re-derives the company name and address from `raw_text` — resolving one and not
+    # the other leaves the two comparator families disagreeing about what the value
+    # is, which is precisely the class of bug this field exists to avoid.
+    resolved_from:  str | None = None
+    reference_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -147,6 +161,12 @@ class Record:
     category:    str | None = None
     documents:   dict[str, ExtractedDoc] = field(default_factory=dict)
     fields:      dict[str, dict[str, FieldValue]] = field(default_factory=dict)
+    # Phase 10. {role: set of field names whose LABEL was matched in that document},
+    # recorded independently of whether a usable value came out. The difference
+    # between "we found no gross-weight label in this BL" and "the BL leaves gross
+    # weight blank" is the whole of Fix 1, and it is exactly what a reviewer needs on
+    # screen before deciding. `inspect` renders it; a UI would too.
+    labels_seen: dict[str, frozenset[str]] = field(default_factory=dict)
     comparisons: dict[str, Comparison] = field(default_factory=dict)
     state:       RecordState | None = None
     reason:      ReasonKey | None = None
