@@ -27,7 +27,7 @@ rather than reimplemented.
 | Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** | recall **1.000** |
 | **Final** | | **0.9510** | **0.9858** |
 
-All **20/20** planted edge cases correct. 645 tests pass. Two runs produce
+All **20/20** planted edge cases correct. 711 tests pass. Two runs produce
 byte-identical output.
 
 **Two numbers, and the difference is the point.** The left column is the system with
@@ -71,7 +71,7 @@ Then:
 ```powershell
 python -m shipdoc                      # full run -> output\
 python -m shipdoc inspect email_013    # one record, seven fields, side by side
-python -m pytest -q                    # 645 tests
+python -m pytest -q                    # 711 tests
 ```
 
 ## Why the model cache is committed

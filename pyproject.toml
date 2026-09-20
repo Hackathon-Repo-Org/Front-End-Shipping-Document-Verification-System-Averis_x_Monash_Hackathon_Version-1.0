@@ -32,8 +32,20 @@ ocr = ["pytesseract>=0.3", "pillow>=10.0"]
 # install — SETUP.md tier 3.
 llm = []
 
+# Phase 12. Hosted, OpenAI-compatible providers (DeepSeek, OpenAI, Together, Groq).
+# Ollama needs none of this and stays the offline option.
+hosted = ["openai>=1.40"]
+
+# Phase 13. The database adapter. OPTIONAL: with no DATABASE_URL the system runs
+# exactly as before and writes files only, so the clean-clone gate needs none of it.
+db = ["sqlalchemy>=2.0", "alembic>=1.13", "psycopg[binary]>=3.1"]
+
+# Azure Blob Storage for attachment bytes. Also optional — seeding records the
+# metadata and skips the upload when this is absent.
+blob = ["azure-storage-blob>=12.19"]
+
 dev = ["pytest>=8.0"]
-all = ["shipdoc[ocr,llm,dev]"]
+all = ["shipdoc[ocr,llm,hosted,db,dev]"]
 
 [project.scripts]
 shipdoc = "shipdoc.cli:main"
@@ -50,6 +62,8 @@ testpaths = ["tests"]
 # duplicate would shadow a real one and the failure would be baffling.
 norecursedirs = ["BACKUP", "dataset", "output", "docs", "tools", "eval", ".*", "*.egg-info"]
 pythonpath = ["src", "tests"]
+# `slow` marks the end-to-end runs over the whole 520-email corpus.
+markers = ["slow: end-to-end run over the whole corpus"]
 
 [tool.coverage.run]
 source = ["src/shipdoc"]

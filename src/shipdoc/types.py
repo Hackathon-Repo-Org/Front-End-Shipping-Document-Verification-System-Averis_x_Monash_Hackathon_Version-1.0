@@ -159,6 +159,9 @@ class Record:
     email_id:    str
     raw:         dict
     category:    str | None = None
+    # Phase 13. Which KIND of logic settled the category: "rule" or "llm". Recorded
+    # by the arbiter at the point of decision, never inferred from the confidence.
+    decided_by:  str | None = None
     documents:   dict[str, ExtractedDoc] = field(default_factory=dict)
     fields:      dict[str, dict[str, FieldValue]] = field(default_factory=dict)
     # Phase 10. {role: set of field names whose LABEL was matched in that document},
@@ -225,6 +228,14 @@ class LLMSettings:
     timeout_s:      float = 30.0
     temperature:    float = 0.0
     seed:           int | None = 0
+    # Phase 12. Which implementation of the LLMClient protocol to build.
+    #   ollama  — local, offline, air-gapped. NOT deprecated: a customer who
+    #             requires no outbound network gets a working system.
+    #   deepseek / openai / together / groq — hosted, OpenAI-compatible.
+    #   none    — never build a model; deterministic keyword rules only.
+    # The API key is NEVER config. It comes from the environment.
+    provider:       str = "ollama"
+    base_url:       str | None = None
 
 
 @dataclass(frozen=True)

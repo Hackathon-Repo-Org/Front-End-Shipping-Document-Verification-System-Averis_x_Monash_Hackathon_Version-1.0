@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 645 passed, 0 failed. Output deterministic. The next work —
+**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 711 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
@@ -81,6 +81,61 @@ Progression: **0.8582 → 0.9510**.
 - **Documentation:** invariant I3 says a value must appear "word for word in the
   source document". It is really "in the text extracted from the document". The docx
   case is exactly where that distinction bit. Worth correcting in the spec.
+
+### Phase 12 + 13 — hosted AI and the Azure database layer (2026-09-20)
+
+Closes review findings **A1 (cloud)** and **A3 (AI as a key component)**. The
+organisers confirmed hosted AI is acceptable because the corpus is synthetic.
+
+**Phase 12 — a second `LLMClient`, not a rewrite.** `src/shipdoc/llm/hosted.py` is
+written against the OpenAI SDK with a configurable `base_url`, so one class covers
+**DeepSeek, OpenAI, Together and Groq**; switching is `llm.provider` in
+`config/pipeline.yaml`. `classify/`, `compare/` and `state/` are untouched — that is
+what confining the model behind a Protocol in M12b bought.
+
+`deepseek-chat`, not `deepseek-reasoner`: every question here is closed ("return
+exactly one of five strings"), so a reasoning model costs more and is slower for no
+benefit.
+
+**Ollama stays, fully supported, as the offline / air-gapped option.** "Runs with no
+outbound network if a customer requires it" is a real selling point for a freight
+operator handling commercial documents, and removing it would trade a capability for
+nothing.
+
+Reliability, because this is now a network call inside a 520-email batch: explicit
+timeout, exponential backoff with **full jitter** on 429/5xx, capped attempts, and
+call/failure/latency counters in `run_summary.json`. 520 records all sleeping exactly
+2s after a rate limit reconverge into the same wall a second later — hence the jitter.
+The constrained-output rule is unchanged: one permitted string, validate, one retry,
+then `None`.
+
+**Phase 13 — the database is an ADAPTER.** `src/shipdoc/adapters/db/`, 12 tables,
+Alembic-managed, PostgreSQL in production and SQLite for the tests. Nothing under
+`ingest/ detect/ extract/ route/ normalise/ compare/ state/ classify/` may import it;
+the layering test catches that already and `test_db_rules.py` names the rule
+explicitly so it survives a future reordering of the layer list.
+
+| Rule | Where it is asserted |
+|---|---|
+| R1 adapter | `test_r1_no_core_module_imports_the_database` + layering |
+| R2 runs immutable | `test_r2_reprocessing_creates_a_new_run_and_never_updates_the_old`, and there is no `updated_at` column anywhere |
+| R3 decisions outlive runs | `review_decisions` has no `run_id` column; corrections supersede |
+| R4 reproducibility | `runs` carries config / learned-labels / decisions hashes, code version, provider, model, prompt version |
+| R5 no gold labels | no table, no repository method, `test_r5_*` |
+
+**Azure SQL is a viable alternative** if the team already has it. The port is small
+but not free: the two `JSONB` columns (`comparisons.si_evidence/bl_evidence`) and
+`submissions.payload` become `NVARCHAR(MAX)` with `JSON_VALUE` / `OPENJSON` for
+querying; `BIGSERIAL` becomes `IDENTITY`; `TIMESTAMPTZ` becomes
+`DATETIMEOFFSET`; and the two **partial unique indexes** become filtered indexes
+(`CREATE UNIQUE INDEX … WHERE active = 1`), which SQL Server does support. The
+`JSONBType` and `GUID` `TypeDecorator`s in `models.py` are the only places that would
+need a third branch — everything else is dialect-neutral SQLAlchemy.
+
+**The one thing to know before deploying:** a Container App's **outbound** IP is not
+the one shown in the portal overview, and it changes on scale or redeploy. A
+firewall that does not allow it produces a hang and a timeout, never a clear denial.
+SETUP.md tier 4a has the commands; prefer a private endpoint in production.
 
 ### Phase 11 — learned label vocabulary (2026-09-20)
 

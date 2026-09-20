@@ -134,6 +134,8 @@ def load_config(path: Path) -> Config:
         timeout_s=float(_require(lm, "timeout_s", "llm")),
         temperature=float(_require(lm, "temperature", "llm")),
         seed=(None if lm.get("seed") is None else int(lm["seed"])),
+        provider=str(lm.get("provider") or "ollama").strip().lower(),
+        base_url=(str(lm["base_url"]) if lm.get("base_url") else None),
     )
 
     fl = _require(pipe_raw, "flags", "pipeline.yaml")

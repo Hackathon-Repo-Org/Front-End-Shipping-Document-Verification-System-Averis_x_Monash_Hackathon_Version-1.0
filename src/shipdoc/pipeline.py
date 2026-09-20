@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import traceback
 from collections import Counter
@@ -19,7 +20,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from shipdoc.adapters.submission import SubmissionAdapter
-from shipdoc.errors import ShipdocError, reason_key
+from shipdoc.errors import LLMUnavailable, ShipdocError, reason_key
 from shipdoc.state.machine import evaluate
 from shipdoc.types import (
     Config,
@@ -61,11 +62,14 @@ def run_stage(rec: Record, fn: Callable[[Record, Config], Record],
 
 def stage_classify(rec: Record, cfg: Config) -> Record:
     from shipdoc.classify.arbiter import classify
-    category, confidence = classify(rec, cfg, _LLM.get("client"))
+    how: dict = {}
+    category, confidence = classify(rec, cfg, _LLM.get("client"), trace=how)
     rec.category = category
+    rec.decided_by = how.get("decided_by")
     rec.trace.append(StageEvent(
         "classify", "ok" if category else "undecided",
-        f"{category} conf={confidence:.2f}", seq=len(rec.trace)))
+        f"{category} conf={confidence:.2f} via={how.get('source', '?')}",
+        seq=len(rec.trace)))
     return rec
 
 
@@ -152,7 +156,7 @@ def stage_compare(rec: Record, cfg: Config) -> Record:
 # Per-run collaborators the (rec, cfg) stage signature cannot carry.
 _CTX: dict[str, Any] = {"inbox": None, "registry": None, "normaliser": None,
                         "roles": {}, "doccache": None, "cache_dir": None,
-                        "label_index": None}
+                        "label_index": None, "llm_metrics": None}
 
 
 def process(rec: Record, cfg: Config, llm: Any,
@@ -264,12 +268,45 @@ def summarise(records: list[Record], degraded_reasons: list[str],
         # reproducible. "" means no learned file, i.e. hand-written rules only.
         "learned_labels_sha256": (cfg.learned.sha256 if cfg is not None else ""),
         "learned_labels_count": (len(cfg.learned.approved) if cfg is not None else 0),
+        # Phase 12 A4. Counts and milliseconds only — never a prompt, a response or
+        # a key, because this file is committed and shipped.
+        "llm_provider": (cfg.llm.provider if cfg is not None else ""),
+        "llm_model": (cfg.llm.model if cfg is not None else ""),
+        "llm_calls": (_CTX["llm_metrics"].as_dict()
+                      if _CTX.get("llm_metrics") is not None else None),
     }
+
+
+def file_sha256(path: Path) -> str:
+    """Hash of the bytes ACTUALLY ON DISK.
+
+    Phase 13 gate 3 asks for the submission in the database to match the file. The
+    obvious implementation — re-serialise the payload and hash that — is wrong, and
+    wrong in a way that took a real measurement to catch:
+
+    `write_atomic` opens the file in TEXT mode, so on Windows Python translates every
+    `\\n` into `\\r\\n`. The published hash c02b4f44 / 676d2fc4 is therefore a hash of
+    CRLF bytes. A re-serialisation in memory produces LF and can never match, and
+    "fixing" that by writing binary changes every artifact this project has ever
+    published — which is exactly what happened here before this function existed.
+
+    Hashing the file after writing it is both simpler and immune to the question.
+    """
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def write_atomic(path: Path, payload: object) -> None:
     """Temp file plus rename: a killed process must not leave a half-written artifact
-    that deserialises into garbage on the next run."""
+    that deserialises into garbage on the next run.
+
+    TEXT mode, deliberately. It is what produced every published hash, and switching
+    to binary would silently rewrite all of them on Windows.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
@@ -301,16 +338,103 @@ def build_llm(cfg: Config, out_dir: Path, cache_dir: Path | None = None):
     from shipdoc.llm.client import CachedLLM, OllamaClient, probe
 
     root = Path(cache_dir) if cache_dir else LLM_CACHE_DIR
+    provider = (cfg.llm.provider or "ollama").lower()
+
+    # Phase 12. `none` means: never build a model. Deterministic keyword rules only.
+    # A cache is still not consulted, because the point of this setting is to answer
+    # "what does this system do with no AI at all?" honestly.
+    if provider == "none":
+        return None
+
+    def _cached(inner):
+        return CachedLLM(inner, Cache(root), prompt_version=cfg.llm.prompt_version,
+                         model=cfg.llm.model)
+
+    def _warm_cache_only():
+        """A committed cache answers every prompt this corpus asks, so a clone with
+        no model and no API key still reproduces the published run."""
+        return _cached(_Unreachable(cfg.llm.model)) \
+            if root.is_dir() and any(root.rglob("*")) else None
+
+    if provider != "ollama":
+        from shipdoc.llm.hosted import HostedClient, MissingAPIKey
+        try:
+            inner = HostedClient(cfg.llm.model, provider=provider,
+                                 base_url=cfg.llm.base_url,
+                                 temperature=cfg.llm.temperature, seed=cfg.llm.seed)
+        except MissingAPIKey as e:
+            # A2: clean degrade, readable message, no stack trace, no config echoed.
+            print(f"shipdoc: {e}", file=sys.stderr)
+            return _warm_cache_only()
+        except LLMUnavailable as e:
+            print(f"shipdoc: {e}", file=sys.stderr)
+            return _warm_cache_only()
+        _CTX["llm_metrics"] = inner.metrics
+        return _cached(inner)
+
     inner = OllamaClient(cfg.llm.model, temperature=cfg.llm.temperature,
                          seed=cfg.llm.seed)
-    client = CachedLLM(inner, Cache(root), prompt_version=cfg.llm.prompt_version,
-                       model=cfg.llm.model)
-
+    client = _cached(inner)
     if probe(inner, timeout_s=min(cfg.llm.timeout_s, 15.0)):
         return client
     # No server. If the cache has entries they are this model's own answers at
     # temperature 0, so they are exactly what the server would have returned.
     return client if root.is_dir() and any(root.rglob("*")) else None
+
+
+class _Unreachable:
+    """Stands in for a model we cannot reach, so a warm cache still serves.
+
+    A cache MISS raises LLMUnavailable — the same thing a dead server raises — which
+    the pipeline already degrades from. Without this the alternative is handing back
+    a live client that will fail on every miss with a provider-shaped error.
+    """
+
+    def __init__(self, model: str):
+        self.model = model
+
+    def complete(self, prompt: str, *, choices=None, timeout_s: float = 30.0) -> str:
+        raise LLMUnavailable("no model configured or reachable; cache miss")
+
+
+def save_run_to_db(result: dict, cfg: Config, config_dir: str, out_dir: Path) -> None:
+    """Write one run to the database, if one is configured. Otherwise do nothing.
+
+    Everything here is INSERT (R2). Re-processing produces a new run_id rather than
+    mutating a finished run, so "what did we say on the 20th?" keeps an answer.
+
+    Wrapped by the caller in a broad except on purpose: a database outage must
+    degrade to file-only output, never take down a 520-email batch. The files on
+    disk remain the source of truth for the submission.
+    """
+    from shipdoc.adapters.db import build_repository
+
+    repo = build_repository()
+    if repo is None:
+        return
+
+    from shipdoc.adapters.db.project import (
+        code_version, config_sha256, record_rows,
+    )
+    from shipdoc.adapters.db.repository import RunInput
+
+    summary = result["summary"]
+    run_id = repo.save_run(RunInput(
+        code_version=code_version(Path.cwd()),
+        config_sha256=config_sha256(Path(config_dir)),
+        learned_labels_sha256=summary.get("learned_labels_sha256", ""),
+        decisions_sha256=repo.decisions_sha256(),
+        submission=result["submission"],
+        # The hash of the FILE AS WRITTEN, so a run row matches output/submission.json
+        # byte for byte and gate 3 is a direct comparison rather than an argument.
+        submission_sha256=file_sha256(out_dir / "submission.json"),
+        records=record_rows(result["records"], result["submission"]),
+        llm_provider=cfg.llm.provider, llm_model=cfg.llm.model,
+        prompt_version=cfg.llm.prompt_version,
+        degraded=bool(summary.get("degraded")),
+        run_summary_sha256=file_sha256(out_dir / "run_summary.json"),
+    ))
+    print(f"shipdoc: run {run_id} written to the database", file=sys.stderr)
 
 
 def propose_labels(records: list[Record], cfg: Config, llm: Any,
@@ -375,6 +499,15 @@ def main_run(source: str, config_dir: str, out_dir: str,
     write_atomic(out / "run_summary.json", result["summary"])
 
     write_queue(result["records"], queue_path, preserve=prior)
+
+    # Phase 13. Persist the run IF a database is configured. `None` is the supported
+    # default, not a degraded mode: with no DATABASE_URL this is a no-op and the run
+    # is byte-identical to one on a machine with no database driver installed.
+    try:
+        save_run_to_db(result, cfg, config_dir, out)
+    except Exception as e:  # noqa: BLE001 - the database must never break a run
+        print(f"shipdoc: database write skipped ({type(e).__name__}: {e})",
+              file=sys.stderr)
 
     # Phase 11. Propose label->field mappings for labels nobody has ruled on yet.
     # This writes a QUEUE. Nothing here changes how this run behaved, and nothing

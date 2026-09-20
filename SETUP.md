@@ -180,6 +180,147 @@ python -m shipdoc --submit --server-url http://localhost:8080
 
 ---
 
+## Tier 3c — a hosted model instead of Ollama (optional)
+
+Phase 12. DeepSeek's API is OpenAI-compatible, so one client covers DeepSeek, OpenAI,
+Together and Groq — changing provider is a config change, not a code change.
+
+```powershell
+pip install -e ".[hosted]"
+Copy-Item .env.example .env          # then put your key in it
+```
+
+`config/pipeline.yaml`:
+
+```yaml
+llm:
+  provider: deepseek          # deepseek | openai | together | groq | ollama | none
+  model: deepseek-chat        # NOT deepseek-reasoner - see below
+  prompt_version: v1
+```
+
+The key is read from the **environment only** (`DEEPSEEK_API_KEY`). It is never read
+from config, never written to the cache, the run summary, a log line or the database,
+and `tests/property/test_no_secret_leak.py` greps the whole tree and the committed
+cache for key-shaped strings.
+
+**`deepseek-chat`, not `deepseek-reasoner`.** Every question this system asks a model
+is closed — "return exactly one of these five strings". There is nothing to reason
+about, so a reasoning model costs more and is slower for no benefit.
+
+**No key set?** The system says so in one readable line and falls back to
+deterministic keyword rules. That is a supported mode, not a crash.
+
+**Ollama is not deprecated.** `provider: ollama` remains fully supported and is the
+offline / air-gapped option — a freight operator handling commercial documents is
+exactly the customer who asks for "no outbound network", and that is a real property
+of this system rather than a limitation.
+
+---
+
+## Tier 4 — Azure: the database and blob storage (optional)
+
+Phase 13. **Everything above works with no database.** This tier adds durable
+storage, the review history, and what the API and dashboard will read from.
+
+### 4a. Azure Database for PostgreSQL, Flexible Server
+
+**Burstable B1ms** is enough for a demo — 1 vCPU, 2 GiB, and it is the cheapest tier
+that supports everything used here.
+
+```bash
+az postgres flexible-server create   --resource-group shipdoc-rg --name shipdoc-db   --tier Burstable --sku-name Standard_B1ms   --version 16 --database-name shipdoc   --admin-user shipdocadmin --admin-password '<a strong password>'
+```
+
+**SSL is required** — Azure rejects an unencrypted connection, so `sslmode=require`
+is not optional:
+
+```
+DATABASE_URL=postgresql+psycopg://shipdocadmin:<password>@shipdoc-db.postgres.database.azure.com:5432/shipdoc?sslmode=require
+```
+
+Environment variable only. Never commit it: it contains the password, and
+`test_no_secret_leak.py` fails the build if a password-bearing URL appears in the tree.
+
+> ### ⚠️ Firewall — the single most common reason a deployed app cannot reach the DB
+>
+> A Container App's **outbound** IP is not the one you see in the portal's overview,
+> and it changes when the app scales or is redeployed. Symptoms are a hang followed
+> by a timeout, never a clear "denied".
+>
+> ```bash
+> # allow Azure services (simplest; still not public)
+> az postgres flexible-server firewall-rule create >   --resource-group shipdoc-rg --name shipdoc-db >   --rule-name allow-azure --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
+>
+> # and your own machine, for migrations and seeding
+> az postgres flexible-server firewall-rule create >   --resource-group shipdoc-rg --name shipdoc-db >   --rule-name my-laptop --start-ip-address <your ip> --end-ip-address <your ip>
+> ```
+>
+> For production prefer a **private endpoint** or VNet integration over an IP
+> allow-list; the allow-list is a demo convenience.
+
+### 4b. Migrate and seed
+
+The schema lives in version control. `create_all` is used only by the SQLite test
+repository — PostgreSQL is owned by Alembic, because a schema two mechanisms can
+create is a schema that differs between environments.
+
+```powershell
+pip install -e ".[db]"
+alembic upgrade head          # creates 12 tables and the two partial indexes
+python -m shipdoc db check    # prints the row counts
+python -m shipdoc db seed     # loads 520 emails + 250 attachment records
+```
+
+**Seeding is idempotent.** Every write is keyed on the natural key (`email_id`,
+`(email_id, filename)`), so running it twice changes nothing. Verify it yourself:
+
+```powershell
+python -m shipdoc db counts
+python -m shipdoc db seed
+python -m shipdoc db counts   # identical
+```
+
+### 4c. Azure Blob Storage for attachment bytes
+
+The database holds attachment **metadata and a blob URL**. The bytes live in Blob
+Storage — a 520-document corpus fits in a database, the next one will not, and a
+bytes column is the hardest thing to migrate out of later.
+
+```bash
+az storage account create --name shipdocstore --resource-group shipdoc-rg --sku Standard_LRS
+az storage container create --name shipdoc-attachments --account-name shipdocstore
+```
+
+```
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
+AZURE_BLOB_CONTAINER=shipdoc-attachments
+```
+
+**SAS URLs, never public blobs.** The container stays private; a short-lived SAS
+token is issued when a reviewer actually opens a document. A container with public
+read on it is a shipping customer's commercial documents on the open internet.
+
+Without a storage account configured, seeding still records the metadata (name, size,
+sha256, detected type) and skips the upload — so a database and no storage account
+gives you a working, inspectable dataset rather than an error.
+
+### 4d. Running with the database
+
+```powershell
+python -m shipdoc            # writes files AND one immutable run to the database
+```
+
+A run inserts one `runs` row, 520 `records`, their `comparisons` and `stage_events`,
+and one `submissions` row. **Runs are immutable** — re-processing creates a new
+`run_id` rather than overwriting, so "what did we say on the 20th?" keeps an answer.
+
+If the database is unreachable the run still completes and writes its files; the
+failure is reported on stderr and the files remain the source of truth. A database
+outage must never take down a batch.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

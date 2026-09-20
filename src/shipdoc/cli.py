@@ -14,9 +14,9 @@ def build_parser() -> argparse.ArgumentParser:
                     "of lading.",
         epilog="Start with:  python -m shipdoc doctor")
     p.add_argument("command", nargs="?", default="run",
-                   choices=["run", "doctor", "inspect", "labels"],
+                   choices=["run", "doctor", "inspect", "labels", "db"],
                    help="run (default) · doctor (health check) · inspect (one email) "
-                        "· labels (approve proposed label mappings)")
+                        "· labels (approve proposed label mappings) · db (seed | counts | check)")
     p.add_argument("email_id", nargs="?", default=None,
                    help="for `inspect`: the email to show, e.g. email_013; "
                         "for `labels`: list, approve or reject")
@@ -56,6 +56,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         from shipdoc import doctor
         return doctor.run(Path.cwd(), fast=args.fast)
+
+    if args.command == "db":
+        from shipdoc import db_cli
+        return db_cli.run(args.email_id or "check", source=args.source)
 
     if args.command == "labels":
         from shipdoc import labels_cli
