@@ -76,7 +76,10 @@ python -m pytest -q                    # 711 tests
 
 ## Why the model cache is committed
 
-`cache/llm/` holds this system's **own classifier outputs**, produced at temperature 0.
+`cache/llm/` holds this system's **own model outputs**, produced at temperature 0, from
+**both** providers — `cache/llm/MANIFEST.json` lists every model that has written
+there. Cache keys include the model name, so entries never collide and swapping
+providers re-queries rather than silently reusing the other model's answers.
 Committing it means a fresh clone reproduces the published score in seconds with no
 Ollama installed, and it is what makes runs byte-identical — temperature 0 alone does
 not guarantee that, because batching and GPU reduction order vary between calls.

@@ -109,16 +109,35 @@ def write_manifest(cache_root, model: str, prompt_version: str) -> None:
     if not root.is_dir():
         return
     entries = sum(1 for p in root.rglob("*") if p.is_file() and p.name != "MANIFEST.json")
-    (root / "MANIFEST.json").write_text(json.dumps({
-        "model": model,
+
+    # Phase 12. The cache may hold answers from SEVERAL models — the key includes the
+    # model name, so they coexist without colliding. Record every model that has
+    # written here, not just the last one to run, or the manifest claims a mixed
+    # cache came from whichever provider happened to finish most recently.
+    prior = {}
+    mf = root / "MANIFEST.json"
+    if mf.is_file():
+        try:
+            prior = json.loads(mf.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            prior = {}
+    models = sorted({*(prior.get("models") or []),
+                     *( [prior["model"]] if prior.get("model") else [] ),
+                     model} - {""})
+
+    mf.write_text(json.dumps({
+        "models": models,
+        "model": model,                 # the model that wrote most recently
         "prompt_version": prompt_version,
         "entries": entries,
         "note": ("Answers produced by this system's own models at temperature 0. "
-                 "Keys are sha256(model + prompt_version + prompt + choices). Values "
-                 "are either one of the five category strings (the M07 classifier) "
-                 "or one compared-field name / NONE / a rejected free-text reply "
-                 "(the Phase 11 label proposer). No email text and no gold labels "
-                 "are stored. Clear with: rm -rf cache/llm  then re-run with Ollama."),
+                 "Keys are sha256(model + prompt_version + prompt + choices), so "
+                 "entries from different models coexist and never collide — see "
+                 "'models' for every provider that has written here. Values are "
+                 "either one of the five category strings (the M07 classifier) or "
+                 "one compared-field name / NONE / a rejected free-text reply (the "
+                 "Phase 11 label proposer). No email text, no API key and no gold "
+                 "labels are stored. Clear with: rm -rf cache/llm, then re-run."),
     }, indent=2) + "\n", encoding="utf-8")
 
 

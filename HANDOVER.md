@@ -293,6 +293,87 @@ They are queued in `output/label_proposals.json`, pending, **deliberately not
 rejected** — they are the evidence. A reviewer should reject all five, which records
 them as anti-synonyms so the question never returns.
 
+### Provider comparison — qwen2.5:7b-instruct vs deepseek-chat (2026-09-20)
+
+Same prompts, same corpus, same code. Cache keys include the model name, so the
+DeepSeek run missed every qwen entry and re-queried — verified before measuring, or
+none of these numbers would mean anything.
+
+**Four axes**
+
+| Axis | Weight | qwen2.5:7b-instruct (local) | deepseek-chat (hosted) |
+|---|---|---|---|
+| stage-1 macro-F1 | 0.30 | **0.9526** · acc 0.9500 | 0.7591 · acc 0.7538 |
+| stage-3 defect-F1 | 0.20 | 1.0000 · P 1.000 R 1.000 | 1.0000 · P 1.000 R 1.000 |
+| end-to-end | 0.50 | 1.0000 — 46/46 | 1.0000 — 46/46 |
+| reliability (unscored) | 0.00 | esc-R 1.000 | esc-R 1.000 |
+| **final** | | **0.9858** | **0.9277** |
+| disagreements | | 48 | 155 |
+
+**The 394 attachment-free classifications** — the records where the model, not the
+attachment structure, actually decides:
+
+| | qwen | deepseek |
+|---|---|---|
+| macro-F1 | **0.9425** | 0.7246 |
+| accuracy | **0.9340** | 0.6751 |
+
+**The 33 unknown labels**
+
+| First reply | qwen | deepseek |
+|---|---|---|
+| a valid field name | 9 | 5 |
+| the literal `NONE` | 1 | **28** |
+| **not in the closed vocabulary** | **23** | **0** |
+| calls / failures / retries | — | 66 / 0 / 0, mean 658 ms |
+
+Both models proposed the same **4 correct** gross-weight spellings, so both score
+**4 of 33 both valid and correct**. The difference is in what else they said.
+
+**Every DeepSeek proposal a human would reject — there is exactly one:**
+
+| Label | Proposed | The value on that line | Why it is wrong |
+|---|---|---|---|
+| `NEW NO` | `notify_party` | `23, L-BLOCK, 17TH STREET` | a street-address fragment, not a party name |
+
+qwen made the same mistake, plus four more (`Commodity ()`, `Description ()`,
+`Description of Goods ()`, `Vessel Name`, all → `gross_weight_kg`). That both models
+independently mis-read `NEW NO` is the more interesting fact: it is a genuinely
+ambiguous line, and it is exactly the kind of thing the approval gate exists for.
+Nothing was approved; it sits pending.
+
+**Reading these numbers honestly**
+
+DeepSeek is far better at *following the format* — 0 invalid replies against qwen's
+23, no echoing the label back, no inventing field names like `vessel_name` — and far
+worse at *this corpus's category boundary*. One error accounts for almost all of it:
+
+```
+gold SI_REQUEST -> deepseek BL_COMPARISON     106 records
+gold SI_REQUEST -> qwen     BL_COMPARISON       1 record
+```
+
+**A tempting explanation, and why it is not in this document as a conclusion.** These
+emails carry the SI fields inline in the body (`POL:`, `POD:`, `Shipper:`,
+`Consignee:`) under a `REQUEST SI` subject, so "DeepSeek reads inline shipping fields
+as a comparison" is an appealing story. It was tested and **falsified**: 100% of the
+106 DeepSeek got wrong *and* 100% of the 19 it got right carry four or more inline SI
+fields. The feature does not separate the groups, so it is not the cause. What can be
+said is only the difference: on one homogeneous class of 125 emails, qwen answers
+SI_REQUEST 124 times and DeepSeek 19 times.
+
+**What is NOT being done about it.** The prompt was developed against qwen across
+Phases 3–11 and never adapted for DeepSeek, which is a plausible cause and an
+untested one. Rewriting the prompt until DeepSeek's macro-F1 improves would be tuning
+against the scoreboard — forbidden since Phase 3, and it would make every number in
+this table meaningless. The prompt stands; the finding is reported.
+
+**Which provider ships?** `qwen2.5:7b-instruct` via Ollama remains the default, on
+this evidence. DeepSeek is production-ready, costs cents, needs no GPU and is one
+config line away — but on *this* corpus it costs 0.058 of final score. A team
+deploying to Azure with no GPU should take that trade knowingly, or spend a prompt
+iteration on it first.
+
 ### The learned vocabulary is independent of the answer key
 
 This matters because a system that learns could, in principle, learn *from the marks*
