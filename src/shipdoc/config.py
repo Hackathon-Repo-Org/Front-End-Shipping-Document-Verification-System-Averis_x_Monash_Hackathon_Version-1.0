@@ -153,8 +153,17 @@ def load_config(path: Path) -> Config:
     if unlocode_path is not None and not unlocode_path.is_file():
         unlocode_path = None
 
+    # Phase 11. Loaded ALONGSIDE fields.yaml, never merged into it. Absent file means
+    # an empty vocabulary and byte-identical behaviour — the feature is inert until a
+    # human approves something.
+    from shipdoc.learned import apply_to_fields, load_learned
+
+    learned = load_learned(path, fields)
+    fields = apply_to_fields(fields, learned)
+
     return Config(
         fields=MappingProxyType(fields),
+        learned=learned,
         comparison_category=str(_require(fields_raw, "comparison_category", "fields.yaml")),
         sentinels=tuple(str(s) for s in sentinels),
         thresholds=thresholds,

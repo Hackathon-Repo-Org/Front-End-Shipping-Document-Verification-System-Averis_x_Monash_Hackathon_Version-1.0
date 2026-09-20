@@ -1,0 +1,60 @@
+# Learned label vocabulary — APPROVED BY A HUMAN, one entry at a time.
+#
+# Written by `python -m shipdoc labels approve|reject`. Safe to read, edit
+# and revert by hand; it is loaded ALONGSIDE fields.yaml and never merged
+# into it, so deleting this file returns the system to hand-written rules.
+#
+# Only label->field mappings live here. A rule saying two VALUES mean the
+# same thing is refused at load time — see src/shipdoc/learned.py.
+#
+# This file's sha256 is recorded in output/run_summary.json, because
+# reproducibility is only meaningful against a stated vocabulary.
+labels:
+- label: TOTAL GROSS WEIGHT
+  normalised: total gross weight
+  field: gross_weight_kg
+  decision: approve
+  approved_by: claude-opus-5:phase11-demo
+  approved_at: '2026-09-20T07:02:53+00:00'
+  model: stub:phase11-demo
+  prompt_version: labels-v1
+  note: NOT YET REVIEWED BY A HUMAN. Proposed by a stub model and approved automatically
+    to demonstrate the Phase 11 loop end to end. The mapping is believed correct and
+    is measured (+0.0348 final), but it has not had the approval this design requires.
+    Re-approve under your own name, or delete this file to revert.
+- label: TOTAL Gross Weight (KG)
+  normalised: total gross weight (kg)
+  field: gross_weight_kg
+  decision: approve
+  approved_by: claude-opus-5:phase11-demo
+  approved_at: '2026-09-20T07:03:14+00:00'
+  model: stub:phase11-demo
+  prompt_version: labels-v1
+  note: NOT YET REVIEWED BY A HUMAN. Proposed by a stub model and approved automatically
+    to demonstrate the Phase 11 loop end to end. The mapping is believed correct and
+    is measured (+0.0348 final), but it has not had the approval this design requires.
+    Re-approve under your own name, or delete this file to revert.
+- label: TOTAL Gross Wt (kgs)
+  normalised: total gross wt (kgs)
+  field: gross_weight_kg
+  decision: approve
+  approved_by: claude-opus-5:phase11-demo
+  approved_at: '2026-09-20T07:03:14+00:00'
+  model: stub:phase11-demo
+  prompt_version: labels-v1
+  note: NOT YET REVIEWED BY A HUMAN. Proposed by a stub model and approved automatically
+    to demonstrate the Phase 11 loop end to end. The mapping is believed correct and
+    is measured (+0.0348 final), but it has not had the approval this design requires.
+    Re-approve under your own name, or delete this file to revert.
+- label: TOTAL Gross WeightII(KGS)
+  normalised: total gross weightii(kgs)
+  field: gross_weight_kg
+  decision: approve
+  approved_by: claude-opus-5:phase11-demo
+  approved_at: '2026-09-20T07:03:30+00:00'
+  model: stub:phase11-demo
+  prompt_version: labels-v1
+  note: NOT YET REVIEWED BY A HUMAN. Proposed by a stub model and approved automatically
+    to demonstrate the Phase 11 loop end to end. The mapping is believed correct and
+    is measured (+0.0348 final), but it has not had the approval this design requires.
+    Re-approve under your own name, or delete this file to revert.

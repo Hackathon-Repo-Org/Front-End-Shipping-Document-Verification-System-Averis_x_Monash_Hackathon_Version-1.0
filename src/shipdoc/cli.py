@@ -14,10 +14,18 @@ def build_parser() -> argparse.ArgumentParser:
                     "of lading.",
         epilog="Start with:  python -m shipdoc doctor")
     p.add_argument("command", nargs="?", default="run",
-                   choices=["run", "doctor", "inspect"],
-                   help="run (default) · doctor (health check) · inspect (one email)")
+                   choices=["run", "doctor", "inspect", "labels"],
+                   help="run (default) · doctor (health check) · inspect (one email) "
+                        "· labels (approve proposed label mappings)")
     p.add_argument("email_id", nargs="?", default=None,
-                   help="for `inspect`: the email to show, e.g. email_013")
+                   help="for `inspect`: the email to show, e.g. email_013; "
+                        "for `labels`: list, approve or reject")
+    p.add_argument("label", nargs="?", default=None,
+                   help="for `labels approve|reject`: the label, e.g. \"Containers:\"")
+    p.add_argument("--by", default=None,
+                   help="for `labels`: who is approving (defaults to the OS user)")
+    p.add_argument("--note", default="",
+                   help="for `labels`: why, recorded alongside the decision")
     p.add_argument("--source", default="dataset",
                    help="dataset directory, or an http(s):// server URL")
     p.add_argument("--config", default="config", help="directory holding the YAML config")
@@ -48,6 +56,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         from shipdoc import doctor
         return doctor.run(Path.cwd(), fast=args.fast)
+
+    if args.command == "labels":
+        from shipdoc import labels_cli
+        return labels_cli.run(args.email_id or "list", args.label,
+                              out_dir=args.out, config_dir=args.config,
+                              who=args.by, note=args.note)
 
     if args.command == "inspect":
         from shipdoc import inspect as inspect_mod

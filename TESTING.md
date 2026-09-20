@@ -47,7 +47,7 @@ Add `--fast` to skip the test-suite check (about 5 seconds instead).
 python -m pytest -q
 ```
 
-**Expected:** `577 passed` in about 50 seconds. Zero failures is the thing that
+**Expected:** `642 passed` in about 50 seconds. Zero failures is the thing that
 matters; the count rises as tests are added.
 
 | Directory | What it covers |
@@ -287,3 +287,40 @@ does not.
 
 None of these are being fixed today — they are tomorrow's decisions and the team
 takes them together.
+
+---
+
+## Level 6 — "Teach it a label"
+
+The system notices label-shaped lines it does not recognise and asks the model one
+closed question about each. **Nothing it suggests takes effect until you approve it.**
+
+```powershell
+python -m shipdoc labels list                      # what is pending, with evidence
+python -m shipdoc labels approve "Containers:"     # becomes a rule from the next run
+python -m shipdoc labels reject  "Vessel:"         # never asked again
+```
+
+Approvals land in `config/learned_labels.yaml` with full provenance — who, when,
+which model, which prompt version. It is loaded *alongside* `fields.yaml` and never
+merged into it, so **deleting that one file reverts every learned rule at once.**
+
+**Which vocabulary produced a run** is recorded in `output/run_summary.json`:
+
+```json
+"learned_labels_sha256": "554f11cc…",
+"learned_labels_count": 4
+```
+
+That field exists because "two runs produce identical output" is only meaningful
+against a stated vocabulary. A run that does not say which one it used has quietly
+stopped being reproducible.
+
+**What can never be learned** is that two *values* mean the same thing. That is a
+judgement about whether two documents agree, and as a permanent rule it would make
+the system blind to a genuine change of that party on every future shipment. The
+loader refuses such an entry outright:
+
+```powershell
+python -m pytest tests/unit/test_learned_labels.py -q    # 21 passed
+```

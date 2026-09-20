@@ -128,6 +128,13 @@ def stage_normalise(rec: Record, cfg: Config) -> Record:
             doc, _CTX["roles"][rec.email_id].get(role, role))
         rec.fields[role] = values
         rec.labels_seen[role] = seen
+        # Phase 11. Notice unfamiliar label-shaped lines. This only RECORDS them;
+        # proposing is a separate step and approving is a human one.
+        if rec.category == cfg.comparison_category:
+            from shipdoc.normalise.unknown import find_unknown
+            rec.unknown_labels.extend(find_unknown(
+                doc.text, _CTX["label_index"],
+                _CTX["roles"][rec.email_id].get(role, role), role))
     return rec
 
 
@@ -221,11 +228,12 @@ def run_corpus(inbox, cfg: Config, llm: Any = None,
     return {
         "records": records,
         "submission": submission,
-        "summary": summarise(records, degraded_reasons),
+        "summary": summarise(records, degraded_reasons, cfg),
     }
 
 
-def summarise(records: list[Record], degraded_reasons: list[str]) -> dict:
+def summarise(records: list[Record], degraded_reasons: list[str],
+              cfg: Config | None = None) -> dict:
     """The operational metrics artifact. Structured counts, never prose — these are
     what a GROUP BY runs over.
 
@@ -250,6 +258,12 @@ def summarise(records: list[Record], degraded_reasons: list[str]) -> dict:
         "degraded":         bool(degraded_reasons),
         "degraded_reasons": sorted(degraded_reasons),
         "baseline":         None,
+        # Phase 11. WHICH label vocabulary produced this run. Once rules can change,
+        # "two runs produce identical output" is only true for a fixed vocabulary —
+        # a run that does not state which one it used has quietly stopped being
+        # reproducible. "" means no learned file, i.e. hand-written rules only.
+        "learned_labels_sha256": (cfg.learned.sha256 if cfg is not None else ""),
+        "learned_labels_count": (len(cfg.learned.approved) if cfg is not None else 0),
     }
 
 
@@ -299,6 +313,39 @@ def build_llm(cfg: Config, out_dir: Path, cache_dir: Path | None = None):
     return client if root.is_dir() and any(root.rglob("*")) else None
 
 
+def propose_labels(records: list[Record], cfg: Config, llm: Any,
+                   queue_path: Path) -> int:
+    """Phase 11, the PROPOSES step. Returns the number of pending proposals.
+
+    Only labels from records that were ACTUALLY COMPARED are considered: a label on a
+    document we never compared is not evidence that our vocabulary is short, and
+    asking about it spends a reviewer's attention on a document nobody was reading.
+
+    One label, one proposal, once ever — keyed by the normalised label string and
+    deduplicated against approvals, rejections AND the existing pending queue.
+    """
+    from shipdoc.llm.label_proposer import propose
+    from shipdoc.review.proposals import already_known, read_proposals, write_proposals
+
+    pending = read_proposals(queue_path)
+    known = {p.normalised for p in pending}
+
+    for rec in records:
+        if not rec.comparisons:
+            continue                       # never compared: not evidence
+        for unknown in rec.unknown_labels:
+            if unknown.normalised in known:
+                continue
+            known.add(unknown.normalised)
+            if already_known(unknown.normalised, cfg.learned, pending):
+                continue
+            proposal = propose(unknown, cfg, llm)
+            if proposal is not None:
+                pending.append(proposal)
+
+    return write_proposals(queue_path, pending)
+
+
 def main_run(source: str, config_dir: str, out_dir: str,
              submit: bool = False, server_url: str | None = None,
              no_llm: bool = False) -> dict:
@@ -328,6 +375,11 @@ def main_run(source: str, config_dir: str, out_dir: str,
     write_atomic(out / "run_summary.json", result["summary"])
 
     write_queue(result["records"], queue_path, preserve=prior)
+
+    # Phase 11. Propose label->field mappings for labels nobody has ruled on yet.
+    # This writes a QUEUE. Nothing here changes how this run behaved, and nothing
+    # here can change how the next one behaves either — only an approval can.
+    propose_labels(result["records"], cfg, llm, Path(out_dir) / "label_proposals.json")
     result["summary"]["decisions_applied"] = len(decisions)
     write_atomic(out / "run_summary.json", result["summary"])
 

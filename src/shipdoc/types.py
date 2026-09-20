@@ -167,6 +167,9 @@ class Record:
     # weight blank" is the whole of Fix 1, and it is exactly what a reviewer needs on
     # screen before deciding. `inspect` renders it; a UI would too.
     labels_seen: dict[str, frozenset[str]] = field(default_factory=dict)
+    # Phase 11. Label-shaped lines on this record's documents that map to no
+    # known field. Collected, never acted on: they become QUESTIONS for a human.
+    unknown_labels: list = field(default_factory=list)
     comparisons: dict[str, Comparison] = field(default_factory=dict)
     state:       RecordState | None = None
     reason:      ReasonKey | None = None
@@ -239,6 +242,67 @@ class FeatureFlags:
     port_resolution_enabled: bool = False
 
 
+# ------------------------------------------------- Phase 11: learned vocabulary
+
+@dataclass(frozen=True)
+class UnknownLabel:
+    """A line that is SHAPED like a label but maps to no field we know.
+
+    Structure, not proportion: it ends in a colon or sits in a table's left cell.
+    No percentage threshold is involved anywhere in its detection — a label that
+    appears once is exactly as worth asking about as one that appears a hundred
+    times, and a threshold would simply delay the question.
+    """
+    raw:        str          # as written in the document
+    normalised: str          # the key: canonical, case- and space-insensitive
+    value:      str          # what followed it — evidence that this IS a field line
+    doc_ref:    str          # file the line came from
+    line_no:    int
+    role:       str          # "SI" or "BL"
+    context:    str          # surrounding lines, so a reviewer can judge it
+
+
+@dataclass(frozen=True)
+class LearnedLabel:
+    """One approved or rejected label->field mapping, with its provenance.
+
+    A learned rule with no provenance cannot be audited and should not exist, so
+    every field below is required at load time except `note`.
+    """
+    label:          str      # the raw label string as proposed
+    normalised:     str      # the key it is matched by
+    field:          str      # the compared field it names
+    decision:       str      # "approve" | "reject"
+    approved_by:    str
+    approved_at:    str      # ISO-8601
+    model:          str      # which model proposed it
+    prompt_version: str
+    note:           str = ""
+
+
+@dataclass(frozen=True)
+class LearnedVocabulary:
+    """The learned set, loaded ALONGSIDE fields.yaml and never merged into it.
+
+    `sha256` goes into run_summary.json. Once rules can change, the same input can
+    produce different output later, and the determinism guarantee becomes conditional
+    on the vocabulary version — a run that does not say which vocabulary it used has
+    quietly stopped being reproducible.
+    """
+    entries: tuple[LearnedLabel, ...] = ()
+    sha256:  str = ""        # of the file's bytes; "" when there is no file
+    path:    str = ""
+    present: bool = False
+
+    @property
+    def approved(self) -> tuple[LearnedLabel, ...]:
+        return tuple(e for e in self.entries if e.decision == "approve")
+
+    @property
+    def rejected(self) -> tuple[LearnedLabel, ...]:
+        return tuple(e for e in self.entries if e.decision == "reject")
+
+
 @dataclass(frozen=True)
 class Config:
     fields:              Mapping[str, FieldSpec]
@@ -250,3 +314,7 @@ class Config:
     # Reference data, resolved relative to the config directory. None when the file
     # is not configured or not present — the resolver degrades rather than failing.
     unlocode_path:       object | None = None
+    # Phase 11. Empty and inert unless config/learned_labels.yaml exists AND holds
+    # approved entries. `fields` above already has the approved synonyms folded in;
+    # this is kept separately so a run can report WHICH vocabulary produced it.
+    learned:             LearnedVocabulary = field(default_factory=LearnedVocabulary)

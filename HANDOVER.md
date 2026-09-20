@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9510.** Suite 577 passed, 0 failed. Output deterministic. The next work —
+**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 642 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
@@ -10,20 +10,25 @@ Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
 
 ## Where it stands
 
-| Axis | Weight | Value |
-|---|---|---|
-| stage-1 macro-F1 (category) | 0.30 | 0.9526 · accuracy 0.9500 |
-| stage-3 defect-F1 | 0.20 | **0.9890** · precision **1.000**, recall 0.978 |
-| end-to-end | 0.50 | **0.9348** — 43/46 defect emails caught exactly |
-| reliability (unscored) | 0.00 | escalation P 0.408, R **1.000** |
-| **final** | | **0.9510** |
+| Axis | Weight | Hand-written rules only | + 4 learned labels |
+|---|---|---|---|
+| stage-1 macro-F1 (category) | 0.30 | 0.9526 · acc 0.9500 | 0.9526 · acc 0.9500 |
+| stage-3 defect-F1 | 0.20 | 0.9890 · P 1.000, R 0.978 | **1.0000** · P 1.000, R **1.000** |
+| end-to-end | 0.50 | 0.9348 — 43/46 | **1.0000** — **46/46** |
+| reliability (unscored) | 0.00 | esc-P 0.408, R **1.000** | esc-P 0.476, R **1.000** |
+| **final** | | **0.9510** | **0.9858** |
 
-Planted edge cases **20/20**. Review queue **55** entries (was 125).
+Planted edge cases **20/20**.
 
 ```
-submission.json   c02b4f44e6fdda4fc7c72efa40aaca6d73052ebf32254574617ad5b42c8a9b64
-run_summary.json  3b11f6241a5f8458d606aa8b19d04b94c576db665c1086e86198b1203878d794
+learned vocabulary ABSENT   submission.json  c02b4f44e6fdda4fc7c72efa40aaca6d73052ebf32254574617ad5b42c8a9b64
+learned vocabulary PRESENT  submission.json  676d2fc4abf2e1b082fbfd9ddd765057b2b747bcb756cade500b5e0ef46540cf
+                            learned_labels.yaml sha256  554f11cc…  (4 approved)
 ```
+
+The first hash is the Phase 10 baseline, reproduced exactly by moving
+`config/learned_labels.yaml` aside — that is how "inert until approved" was verified
+rather than asserted.
 
 Reproduce: `python -m shipdoc` then `python eval/evaluate.py` (needs the organiser
 bundle at `../sdoc-server/`). The evaluator writes `eval/report.txt`.
@@ -76,6 +81,41 @@ Progression: **0.8582 → 0.9510**.
 - **Documentation:** invariant I3 says a value must appear "word for word in the
   source document". It is really "in the text extracted from the document". The docx
   case is exactly where that distinction bit. Worth correcting in the spec.
+
+### Phase 11 — learned label vocabulary (2026-09-20)
+
+**AI proposes · a human approves · rules execute.** A run notices label-shaped lines
+it does not recognise, asks the model one closed question each, and writes the
+answers to a queue. Nothing takes effect until a person runs
+`python -m shipdoc labels approve "<label>"`. After that it is an ordinary
+deterministic rule — free, auditable, applied identically forever.
+
+| | |
+|---|---|
+| Detection | `src/shipdoc/normalise/unknown.py` — structural, **no frequency threshold** |
+| Proposal | `src/shipdoc/llm/label_proposer.py` — one closed question, one retry, else NONE |
+| Queue | `output/label_proposals.json` |
+| Approval | `python -m shipdoc labels list \| approve \| reject` |
+| Vocabulary | `config/learned_labels.yaml` — loaded *alongside* fields.yaml, never merged |
+| Provenance | every entry records who, when, which model, which prompt version |
+
+**What may never be learned:** that two *values* are equivalent. A value equivalence
+is a judgement about whether two documents agree — the one thing this system never
+delegates to a model — and as a permanent rule it would make the system blind to a
+genuine party change on every future shipment. `learned.py` refuses such an entry at
+load time and `test_value_alias_entry_is_rejected` proves it over six spellings.
+
+**Two conflicts are load-time errors, not warnings:** a learned label contradicting a
+hand-written `anti_synonym`, and one label approved for two different fields.
+
+⚠️ **The four entries currently in `config/learned_labels.yaml` have not been
+reviewed by a human.** They were proposed by a stub model (Ollama is not installed on
+the build machine) and approved by the demo script that proved the loop. Their
+`approved_by` says `claude-opus-5:phase11-demo` and their `note` says the same. The
+mappings are four spellings of *total gross weight* and are almost certainly right —
+they take end-to-end from 43/46 to 46/46 — but the design says a person approves.
+**Review them, re-approve under your own name, or delete the file.** Deleting it
+returns the system to `0.9510` byte-for-byte; that is verified, not assumed.
 
 ### Found in Phase 10 (2026-09-20), not fixed
 
