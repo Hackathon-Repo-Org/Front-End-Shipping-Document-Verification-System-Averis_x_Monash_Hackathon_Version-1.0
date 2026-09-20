@@ -27,7 +27,7 @@ rather than reimplemented.
 | Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** | recall **1.000** |
 | **Final** | | **0.9510** | **0.9858** |
 
-All **20/20** planted edge cases correct. 642 tests pass. Two runs produce
+All **20/20** planted edge cases correct. 645 tests pass. Two runs produce
 byte-identical output.
 
 **Two numbers, and the difference is the point.** The left column is the system with
@@ -71,7 +71,7 @@ Then:
 ```powershell
 python -m shipdoc                      # full run -> output\
 python -m shipdoc inspect email_013    # one record, seven fields, side by side
-python -m pytest -q                    # 642 tests
+python -m pytest -q                    # 645 tests
 ```
 
 ## Why the model cache is committed
@@ -82,9 +82,11 @@ Ollama installed, and it is what makes runs byte-identical — temperature 0 alo
 not guarantee that, because batching and GPU reduction order vary between calls.
 
 **It is not the answer key and contains no gold labels.** Each filename is a
-`sha256(model + prompt_version + prompt)` — irreversible, so no email text is stored —
-and each file's entire contents is one of the five category strings this system
-predicted. Nothing in it is derived from the organisers' labels. The model name and
+`sha256(model + prompt_version + prompt + choices)` — irreversible, so no email text
+is stored — and each file's entire contents is one short string this system's own
+models produced: either one of the five category strings (the classifier), or one
+compared-field name, `NONE`, or a rejected free-text reply (the Phase 11 label
+proposer). Nothing in it is derived from the organisers' labels. The model name and
 prompt version are recorded in `cache/llm/MANIFEST.json`, and they are part of every
 cache key, so a cache built by a different model misses and re-queries rather than
 silently returning the wrong answers.

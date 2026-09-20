@@ -20,7 +20,7 @@ import datetime as _dt
 import getpass
 from pathlib import Path
 
-from shipdoc.learned import FILENAME
+from shipdoc.learned import FILENAME, normalise_label
 from shipdoc.review.proposals import read_proposals, write_proposals
 
 _HEADER = "  {:<26} {:<20} {:<7} {}"
@@ -66,8 +66,6 @@ def cmd_list(queue_path: Path) -> int:
 
 def _decide(queue_path: Path, config_dir: Path, label: str, decision: str,
             who: str | None, note: str) -> int:
-    from shipdoc.learned import normalise_label
-
     key = normalise_label(label)
     proposals = read_proposals(queue_path)
     match = next((p for p in proposals if p.normalised == key), None)
@@ -106,10 +104,20 @@ def _decide(queue_path: Path, config_dir: Path, label: str, decision: str,
 
 
 def _append_entry(path: Path, entry: dict) -> None:
-    """Append one entry, preserving everything already in the file.
+    """Record one decision. At most ONE active entry per label, ever.
 
-    Read-modify-write on a small human-editable file, with the comment header
-    recreated when the file is new. Nothing is ever removed here.
+    A second ruling on the same label SUPERSEDES the first rather than sitting
+    beside it. Two active records for one label means the file no longer says who
+    is accountable for that rule — and the whole point of the provenance fields is
+    that exactly one person is.
+
+    This is how a decision made by the wrong party gets corrected: re-approve under
+    your own name and the earlier attribution is replaced, not accumulated.
+
+    Nothing is destroyed. The superseded entry moves to a `superseded:` list in the
+    same file, which the loader ignores and an auditor can read. That is HARD RULE 1
+    applied to a decision record: the history of who decided what is exactly the kind
+    of thing that must not quietly vanish.
     """
     import yaml
 
@@ -118,9 +126,20 @@ def _append_entry(path: Path, entry: dict) -> None:
         loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if isinstance(loaded, dict):
             doc = loaded
+
+    key = entry["normalised"]
     labels = list(doc.get("labels") or [])
+    retired = [e for e in labels
+               if str(e.get("normalised") or normalise_label(str(e.get("label", ""))))
+               == key]
+    labels = [e for e in labels if e not in retired]
     labels.append(entry)
     doc["labels"] = labels
+
+    if retired:
+        history = list(doc.get("superseded") or [])
+        history.extend(retired)
+        doc["superseded"] = history
 
     header = (
         "# Learned label vocabulary — APPROVED BY A HUMAN, one entry at a time.\n"

@@ -1,6 +1,6 @@
 # Handover
 
-**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 642 passed, 0 failed. Output deterministic. The next work —
+**Score 0.9858** with the learned vocabulary, **0.9510** without it. Suite 645 passed, 0 failed. Output deterministic. The next work —
 API, UI, deployment — belongs to the team.
 
 Start here: **`SETUP.md`** (install, three tiers, Tier 1 is five minutes) and
@@ -116,6 +116,109 @@ mappings are four spellings of *total gross weight* and are almost certainly rig
 they take end-to-end from 43/46 to 46/46 — but the design says a person approves.
 **Review them, re-approve under your own name, or delete the file.** Deleting it
 returns the system to `0.9510` byte-for-byte; that is verified, not assumed.
+
+### What the real model actually proposed — and why the gate is load-bearing
+
+Run against `qwen2.5:7b-instruct` over all **33** unknown labels found on compared
+records, with the learned vocabulary moved aside so the four already-approved
+spellings were asked about again. Temperature 0, seed 0; two runs gave identical
+answers.
+
+| First reply from the model | Count |
+|---|---|
+| a valid field name | 9 |
+| the literal `NONE` | **1** |
+| **not in the closed vocabulary at all** | **23** |
+
+**Only one label in thirty-three got a clean `NONE`.** The 23 invalid replies were
+almost all the model *echoing the label back* (`'B/L No.'`, `'Commodity'`,
+`'Voyage No.'`) or **inventing a field that does not exist** (`'vessel_name'`,
+`'voyage_number'`). Free text is refused, one retry is spent, and the result is no
+proposal — so all 23 became silence instead of nonsense. Without that closed-choice
+validation, `vessel_name` would have been accepted as a field name. The retry rescued
+**none** of them; it is cheap insurance that did not pay out here.
+
+Of the 9 valid answers, **4 were right and 5 were wrong**:
+
+| Label | Proposed | The value on that line | Verdict |
+|---|---|---|---|
+| `TOTAL GROSS WEIGHT` and 3 spellings | `gross_weight_kg` | `23,702 KG` | correct — same four the stub found |
+| `Commodity ()` | `gross_weight_kg` | `ASIA SYMBOL FOOD SERVICE BOARD…` | **wrong** |
+| `Description ()` | `gross_weight_kg` | `PAPERBOARD` | **wrong** |
+| `Description of Goods ()` | `gross_weight_kg` | `UNCOATED WOODFREE PAPER IN REAMS` | **wrong** |
+| `Vessel Name` | `gross_weight_kg` | `MMSS 2507 V.257087E` | **wrong** |
+| `NEW NO` | `notify_party` | `23, L-BLOCK, 17TH STREET` | **wrong, and dangerous** |
+
+So **4 of 33 answers (12%) were both valid and correct.** The rest were caught by the
+closed vocabulary or would have been caught by a human.
+
+The model is also *inconsistent with itself*: `description of goods` → invalid, but
+`Description of Goods ()` → `gross_weight_kg`. `vessel` → invalid, `vessel name` →
+`gross_weight_kg`, `vessel name ()` → invalid. The only difference is a CJK-residue
+parenthetical.
+
+**None of the five wrong proposals would have been caught by the load-time conflict
+rules.** They are not anti-synonyms and they do not map one label to two fields — they
+are simply wrong. `NEW NO → notify_party` would have made a street address the notify
+party on every document carrying that label. Only a person looking at the evidence
+line catches these, which is the entire argument for the approval gate.
+
+They are queued in `output/label_proposals.json`, pending, **deliberately not
+rejected** — they are the evidence. A reviewer should reject all five, which records
+them as anti-synonyms so the question never returns.
+
+### The learned vocabulary is independent of the answer key
+
+This matters because a system that learns could, in principle, learn *from the marks*
+— and a vocabulary fitted to `ground_truth.json` would score well and mean nothing.
+It did not, and that is checkable rather than asserted.
+
+**Every input to a learned rule is document text.**
+
+| Step | Reads | Does not read |
+|---|---|---|
+| Detection (`normalise/unknown.py`) | the extracted text of the SI and BL | anything else — it is handed a string and a `LabelIndex` |
+| Proposal (`llm/label_proposer.py`) | the label, its value, ±2 lines of context | no labels, no scores, no email ids |
+| Approval (`labels_cli.py`) | a human's domain judgement | — |
+
+The approval question is *"does `TOTAL GROSS WEIGHT` name the gross weight field?"*
+That is answerable by anyone who has seen a bill of lading, with no access to the
+corpus and no idea what the score is. It would be the same answer if the answer key
+did not exist.
+
+**The five modules import nothing that could reach it:**
+
+```
+normalise/unknown.py     re · shipdoc.normalise.labels · shipdoc.types
+llm/label_proposer.py    shipdoc.errors · shipdoc.learned · shipdoc.review.proposals · shipdoc.types
+review/proposals.py      json · dataclasses · pathlib          (no shipdoc imports at all)
+learned.py               hashlib · re · unicodedata · yaml · shipdoc.errors · shipdoc.types
+labels_cli.py            datetime · getpass · yaml · shipdoc.learned · shipdoc.review.proposals
+```
+
+No filesystem path outside `config/` and `output/` appears in any of them.
+
+**Enforced, not just observed.** `tests/property/test_no_answer_key_leak.py`
+parametrises over `src/shipdoc/**/*.py` with `rglob`, so all five new modules were
+picked up the moment they were written — no test needed editing, and none can be
+forgotten later:
+
+```
+test_package_never_references_the_answer_key[unknown.py]        PASSED
+test_package_never_references_the_answer_key[label_proposer.py] PASSED
+test_package_never_references_the_answer_key[proposals.py]      PASSED
+test_package_never_references_the_answer_key[learned.py]        PASSED
+test_package_never_references_the_answer_key[labels_cli.py]     PASSED
+   …and the same five under test_package_never_hardcodes_an_email_id
+   …and under test_package_never_imports_the_evaluator          184 passed
+```
+
+**The honest caveat.** The answer key was used *after the fact*, to measure what the
+approvals were worth (0.9510 → 0.9858). Measuring an outcome is what the evaluator is
+for. It was not used to choose which labels to propose or which to approve — the four
+were approved before any score was taken, and the proposer never sees a label. Had
+they made the score worse they would have been reverted and reported, exactly as
+Phase 7 Fix 1 was.
 
 ### Found in Phase 10 (2026-09-20), not fixed
 

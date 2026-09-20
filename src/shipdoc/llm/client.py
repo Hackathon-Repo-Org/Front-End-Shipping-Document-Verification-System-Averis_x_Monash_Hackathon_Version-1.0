@@ -113,10 +113,12 @@ def write_manifest(cache_root, model: str, prompt_version: str) -> None:
         "model": model,
         "prompt_version": prompt_version,
         "entries": entries,
-        "note": ("Answers produced by this system's own classifier at temperature 0. "
-                 "Keys are sha256(model + prompt_version + prompt); values are one of "
-                 "the five category strings. No email text and no gold labels are "
-                 "stored. Clear with: rm -rf cache/llm  then re-run with Ollama."),
+        "note": ("Answers produced by this system's own models at temperature 0. "
+                 "Keys are sha256(model + prompt_version + prompt + choices). Values "
+                 "are either one of the five category strings (the M07 classifier) "
+                 "or one compared-field name / NONE / a rejected free-text reply "
+                 "(the Phase 11 label proposer). No email text and no gold labels "
+                 "are stored. Clear with: rm -rf cache/llm  then re-run with Ollama."),
     }, indent=2) + "\n", encoding="utf-8")
 
 
