@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, api, getReviewer, type Stats } from "../lib/api";
+import { ApiError, api, type Stats } from "../lib/api";
 import { Badge, useVocab } from "../lib/vocab";
 
 export function Dashboard() {
@@ -20,7 +20,6 @@ export function Dashboard() {
     <>
       <h1 style={{ fontSize: "1.1rem", marginTop: 0 }}>Dashboard</h1>
 
-      {msg && <div className="banner info"><i className="bi bi-check2-circle" /><span>{msg}</span></div>}
 
       <div className="kpi-row">
         <Kpi label="Records" value={total} sub={`${s.awaiting_documents} awaiting documents`} />
