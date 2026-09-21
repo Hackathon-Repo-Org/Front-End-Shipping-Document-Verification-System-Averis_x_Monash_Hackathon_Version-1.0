@@ -1,0 +1,32 @@
+{
+  "//": [
+    "Azure Static Web Apps configuration.",
+    "",
+    "navigationFallback is what makes a single-page app survive a HARD RELOAD or a",
+    "shared link. Without it, opening /records/email_013 directly asks the static",
+    "host for a file that does not exist and returns 404 — the router never runs.",
+    "That breaks the exact thing the URL-based filter state was built for: sending a",
+    "colleague a link to what you are looking at.",
+    "",
+    "There is NO route-level auth here. Reads are open by design so a judge can",
+    "browse; writes are gated by a passcode header checked at the API. Putting auth",
+    "in front of the static host would gate reading, which is the opposite of what",
+    "is wanted, and would not protect the API at all."
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "*.css", "*.js", "*.png", "*.svg", "*.ico", "*.woff2"]
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin"
+  },
+  "mimeTypes": {
+    ".json": "application/json",
+    ".webmanifest": "application/manifest+json"
+  },
+  "responseOverrides": {
+    "404": { "rewrite": "/index.html" }
+  }
+}
