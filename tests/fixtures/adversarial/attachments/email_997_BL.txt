@@ -1,9 +1,0 @@
-BILL OF LADING (DRAFT)
-========================================
-Shipper: MEGA RUBBER GLOVE SDN. BHD.
-Consignee: NORDIC HEALTHCARE SERVICES GMBH
-Notify Party: NORDIC HEALTHCARE SERVICES GMBH
-Load Port: HAMBURG, GERMANY (DEHAM)
-Discharge Port: PORT KLANG (MYPKG)
-Container Count: 2 x 4O'HC
-Gross Weight (KG): 22.450,50 KGS
