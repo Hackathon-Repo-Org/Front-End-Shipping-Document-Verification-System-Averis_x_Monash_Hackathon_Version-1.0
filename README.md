@@ -147,7 +147,7 @@ python -m uvicorn shipdoc.adapters.api.app:app --port 8000
 
 Leave this terminal open. Check it works by opening <http://localhost:8000/api/health>. You should see `"status":"ok"` and `"records":520`.
 
-No API key is needed: the answers the AI gave for all 520 dataset emails are saved in the backend repository. More setup options (OCR for scanned PDFs, a local AI model, PostgreSQL) are in the backend's `SETUP.md`.
+No API key is needed: the answers the AI gave for all 520 dataset emails are saved in the backend repository. More setup options (OCR for scanned PDFs, a local AI model, PostgreSQL) are in the "Optional add-ons" section of the [backend README](https://github.com/Hackathon-Repo-Org/Shipping-Document-Verification-System-Averis_x_Monash_Hackathon#optional-add-ons).
 
 ### Step 2: start the frontend (second terminal)
 
