@@ -1,258 +1,225 @@
-# Shipping Document Verification
+# ShipDoc Reviewer UI (Frontend)
 
-When a freight customer sends a **Shipping Instruction** (SI) — what they want shipped,
-to whom, to which port — the carrier replies with a **draft Bill of Lading** (BL), the
-document of title that actually moves the cargo. Someone has to check that the draft
-says what the customer asked for, because a wrong consignee or a wrong discharge port
-on a BL is expensive and slow to unwind once the vessel has sailed.
+The web interface for **ShipDoc**, a system that checks a customer's **Shipping Instruction (SI)** against the carrier's **draft Bill of Lading (BL)** and flags any differences before the ship sails.
 
-This system reads a shipping team's inbox, works out which emails are asking for that
-check, and compares **seven fields** between the SI and the draft BL: shipper,
-consignee, notify party, port of loading, port of discharge, container count and gross
-weight. Every field gets one of three verdicts — **match**, **mismatch**, or
-**cannot determine** — and that third verdict is the point: where the documents are
-unreadable, the wrong document was attached, or a value was left blank, the record is
-escalated to a human with the evidence attached rather than guessed at.
+This repository holds the **frontend only**: a React website that reviewers use to browse results, check evidence and record decisions. All the verification logic, the database and the AI live in the backend repository:
 
-## Current score
+**Backend:** <https://github.com/Hackathon-Repo-Org/Shipping-Document-Verification-System-Averis_x_Monash_Hackathon>
 
-Measured **2026-09-21** against the organisers' own `scoring.py`, imported directly
-rather than reimplemented.
+Built for the **Averis x Monash Hackathon 2026**.
 
-| Axis | Weight | `deepseek` (default) | `ollama` (one config line) |
-|---|---|---|---|
-| Stage 1 — email classification (macro-F1) | 0.30 | 0.7591 | **0.9526** |
-| Stage 3 — defect detection (F1) | 0.20 | **1.0000** · P 1.000 R 1.000 | **1.0000** · P 1.000 R 1.000 |
-| End-to-end — defects caught exactly | 0.50 | **1.0000** — 46/46 | **1.0000** — 46/46 |
-| Reliability — escalation (diagnostic, unweighted) | 0.00 | recall **1.000** | recall **1.000** |
-| **Final** | | **0.9277** | **0.9858** |
+---
 
-All **20/20** planted edge cases correct on both. 776 tests pass. Two runs produce
-byte-identical output.
+## Live demo
 
-> **The default is the hosted model, and that is a deliberate trade.**
-> `deepseek-chat` ships as the default because the deployed target is Azure Container
-> Apps, which has no GPU — a hosted API is the realistic path for new email traffic.
-> It costs **0.058 of final score** on this corpus.
->
-> **Defect detection and end-to-end are identical**: both providers find all 46
-> defect emails exactly. The whole difference is stage-1 classification, and almost
-> all of *that* is one systematic error — deepseek reads 106 gold `SI_REQUEST` emails
-> as `BL_COMPARISON`, where qwen gets 124 of 125 right. The prompt was developed
-> against qwen and never adapted; rewriting it until the hosted number improved would
-> be tuning against the answer key.
->
-> **For 0.9858, change one line** in `config/pipeline.yaml` to `provider: ollama`.
-> Neither option needs an API key or a GPU — the committed cache answers every prompt
-> for both models.
+The system is deployed on **AWS** and ready to use. Nothing needs to be installed to try it.
 
-**Two numbers, and the difference is the point.** Deleting
-`config/learned_labels.yaml` returns the system to hand-written rules only, byte for
-byte. The four approved label mappings are what close the last three end-to-end
-misses. Every run records which vocabulary produced it, in `run_summary.json` →
-`learned_labels_sha256`.
+| | Link |
+|---|---|
+| Website | <https://shipdoc.duckdns.org> |
+| API health check | <https://shipdoc.duckdns.org/api/health> |
 
-**On that precision of 1.000:** it is measured on the provided 520-email corpus, and
-it is a fact about that corpus rather than a property of the system — on three
-hand-written adversarial emails the same build reported four false defects before
-Phase 10 and two after, both of which are the known bare-UN/LOCODE case. Those three
-emails now live in `tests/fixtures/adversarial/` and run in CI alongside the 520.
+- **Reading is open to everyone.** Browse the dashboard, inbox, records and evaluation freely.
+- **Review actions need a passcode.** To confirm, correct or approve something, sign in with your name and the demo passcode given in our submission.
 
-## Which AI model — measured, not assumed
+The "Run locally" section below is only needed if you want to run your own copy.
 
-The classifier sits behind a one-method protocol, so the provider is a config line.
-Both were run over the same corpus with the same prompts; cache keys include the
-model name, so the hosted run missed every local entry and genuinely re-queried.
+---
 
-| | `qwen2.5:7b-instruct` (local, Ollama) | `deepseek-chat` (hosted) |
+## What you can do in the app
+
+| Page | Address | What it is for |
 |---|---|---|
-| Stage 1 — macro-F1 | **0.9526** | 0.7591 |
-| Stage 3 — defect-F1 | 1.0000 | 1.0000 |
-| End-to-end | 46/46 | 46/46 |
-| **Final score** | **0.9858** | **0.9277** |
-| Attachment-free 394 (macro-F1) | **0.9425** | 0.7246 |
-| Replies not in the closed vocabulary (of 33) | 23 | **0** |
-| Cost | free, needs a GPU | cents, no GPU |
+| Dashboard | `/` | Totals by status and email category, how many decisions the AI made, and details of the current run |
+| Inbox | `/inbox` | All 520 emails with their category and status. Filter and search; the filters are kept in the address bar, so a filtered view can be shared as a link |
+| Email detail | `/records/:emailId` | The seven compared fields (shipper, consignee, notify party, port of loading, port of discharge, container count, gross weight) side by side for the SI and the BL. Click a value to open the source document at that line |
+| Review queue | `/queue` | Emails the system sent to a human, with the reason (for example a missing attachment or an unreadable file) and the evidence. Confirm or correct them here |
+| Label proposals | `/proposals` | Field labels the AI suggested learning. A reviewer approves or rejects each one, and the decision is signed with their name |
+| Evaluation | `/evaluation` | The scoring axes and the measured comparison of the two AI models (local Qwen vs hosted DeepSeek) |
+| Try it yourself | `/try` | Paste your own shipping instruction and draft bill of lading and run the real verification engine on them. Nothing is stored |
 
-**The counterintuitive part is the useful part.** DeepSeek is much better at
-*following the format* — zero malformed replies against qwen's 23, no echoing the
-label back, no inventing field names — and much worse at *this corpus's category
-boundary*: it calls 106 `SI_REQUEST` emails `BL_COMPARISON`, where qwen gets 124 of
-125 right.
+---
 
-The prompt was developed against qwen and never adapted for DeepSeek. Rewriting it
-until the hosted number improves would be tuning against the answer key, so it was
-not done — the finding is reported instead. Full analysis, including a tempting
-explanation that was **tested and falsified**, is in
-[HANDOVER.md](HANDOVER.md) under *Provider comparison*.
+## How it fits together
 
-**`deepseek-chat` ships as the default** (changed 2026-09-21), because the deployed
-target has no GPU and a hosted API is the realistic path for new email traffic.
-
-**`ollama` remains fully supported and scores higher** — one config line, and it is
-also the **offline / air-gapped** option: the system runs with no outbound network at
-all, which is a real requirement for a freight operator handling commercial
-documents. Removing it was never on the table.
-
-Neither needs an API key for the 520-record corpus: the committed cache holds both
-models' answers, keyed by model name so they never collide.
-
-## The web interface
-
-A reviewer UI and a thin HTTP API ship alongside the CLI. **They deploy separately**
-and talk only over HTTP — the frontend is a static bundle on Azure Static Web Apps,
-the backend a container on Azure Container Apps.
-
-**Frontend repository:**
-<https://github.com/Hackathon-Repo-Org/Front-End-Shipping-Document-Verification-System-Averis_x_Monash_Hackathon_Version-1.0>
-
-```powershell
-# backend
-$env:DATABASE_URL="sqlite:///output/shipdoc.db"
-$env:DEMO_PASSCODE="averis2026"
-$env:CORS_ORIGINS="http://localhost:5173"
-python -m shipdoc db seed
-python -m shipdoc
-python -m uvicorn shipdoc.adapters.api.app:app --port 8000
-
-# frontend, in another terminal
-cd ui; npm install; npm run dev        # http://localhost:5173
+```
+Browser
+   |
+   v
+https://shipdoc.duckdns.org   (AWS EC2 server)
+   |-- Caddy web server
+   |      serves this website (the built files in dist/)
+   |      forwards every /api/* request to the backend
+   |
+   |-- Backend API (FastAPI + verification engine)   <- backend repository
+          |
+          v
+       PostgreSQL database (AWS RDS)
 ```
 
-| Screen | For |
+The website and the API share one address, so the browser never has to call a different domain.
+
+---
+
+## Tech stack
+
+| Part | Used |
 |---|---|
-| Dashboard | counts, the four axes, the AI's share of decisions, cache-hit rate, run hashes |
-| Inbox | filter and search; **filter state lives in the URL** so a view is shareable |
-| Email detail | seven fields side by side — **click any value to open its source at the highlighted line** |
-| Review queue | keyboard-first (`J`/`K`/`Enter`/`A`/`C`/`E`/`R`/`N`), built for fifty in a row |
-| Label proposals | approve or reject what a model suggested, signed with a name |
-| Evaluation | the four axes and the provider comparison |
-| **Try it yourself** | **paste your own SI and BL and watch the real engine run** |
+| Framework | React 18 + TypeScript |
+| Build tool | Vite 5 |
+| Routing | React Router 6 |
+| Styling | Plain CSS (`src/styles.css`) and Bootstrap Icons |
+| Talking to the backend | `fetch`, all in one file: `src/lib/api.ts` |
 
-### Try it yourself
+---
 
-`/try` accepts a pasted shipping instruction and draft bill of lading and runs **the
-real engine** over them — same normaliser, same comparators, same state machine as
-the 520-record batch. Only ingest and extract are skipped, because the text arrived
-as text.
+## Project structure
 
-It needs no passcode, **stores nothing**, and uses no API key, so it cannot be made
-to burn credits by being refreshed. "Load a worked example" prefills a realistic pair
-with one planted defect, so the first click finds something instead of returning OK
-and looking broken.
+```
+src/
+  main.tsx              App entry point and the list of pages (routes)
+  styles.css            All styling
+  lib/
+    api.ts              The only file that calls the backend
+    vocab.tsx           Labels and colours for categories and statuses
+  components/
+    Shell.tsx           Page layout, navigation bar and reviewer sign-in
+    Evidence.tsx        Source-document viewer with the highlighted line
+    DecisionBar.tsx     Confirm / correct / override buttons
+  pages/
+    Dashboard.tsx  Inbox.tsx  Detail.tsx  Queue.tsx
+    Proposals.tsx  Evaluation.tsx  TryIt.tsx
+index.html
+vite.config.ts
+.env.example            Example of the one setting this app needs
+```
 
-### The API
+---
 
-Thin by construction: every route turns a request into one call on the repository
-interface and back. Two tests enforce it — one parses the handlers with `ast` looking
-for engine vocabulary, one forbids importing `compare/` or `state/`.
+## Configuration
 
-`GET /api/health · /api/vocabulary · /api/runs · /api/records · /api/records/{id} ·
-/api/records/{id}/source/{attachment} · /api/proposals · /api/evaluation · /api/stats`
-· `POST /api/records/{id}/decisions · /api/proposals/{id} · /api/try · /api/demo/reset`
+The app needs **one setting**: the address of the backend API.
 
-**Reads are open; writes need a passcode** sent as the `X-Demo-Passcode` header,
-never a cookie — the two halves are different origins, and a third-party cookie is
-blocked in incognito, which is how a judge opens a link.
+| Setting | Example | Meaning |
+|---|---|---|
+| `VITE_API_BASE_URL` | `http://localhost:8000` | Where the backend API is running |
 
-**A decision takes effect immediately, with no pipeline re-run.** Decisions carry no
-`run_id`: they are about the email, not one pass over it. The stored run is never
-rewritten; decisions are applied when a record is read, so the audit question "what
-did the system say before a human touched it?" keeps its answer.
+This value is **built into the website when you run the build**. If you change it, build again. If it is missing, every page shows "This build has no API address".
 
-## Deployment
+---
 
-`docs/deploy-azure.md` is the copy-paste command sequence, every step marked as
-needing a human or not, with the post-deploy checklist in the order that rules out
-one failure at a time. `SETUP.md` tiers 4–6 cover the database, the container and the
-split deployment in more detail.
+## Run locally
 
-The container was rehearsed locally: non-root (uid 10001), port 8000, Tesseract
-present, the LLM cache baked in, and **the full 520-record run completes inside the
-image with no API key and reproduces the published hash.**
+Use this if you want your own copy instead of the live demo. You run the backend and the frontend side by side on your computer.
 
-## Quick start
+### What you need
 
-Python 3.12+. Nothing else — no Docker, no GPU, no model download.
+| Tool | Version | Check with |
+|---|---|---|
+| Git | any recent | `git --version` |
+| Python | 3.12 or newer | `python --version` |
+| Node.js | 20 (18 or newer works) | `node --version` |
+
+The commands below are for **Windows PowerShell**. On macOS or Linux, use `source .venv/bin/activate` instead of `.\.venv\Scripts\Activate.ps1`, and `export NAME=value` instead of `$env:NAME="value"`.
+
+### Step 1: start the backend (first terminal)
 
 ```powershell
-git clone https://github.com/Hackathon-Repo-Org/Shipping-Document-Verification-System-Averis_x_Monash_Hackathon.git
-cd Shipping-Document-Verification-System-Averis_x_Monash_Hackathon
+git clone https://github.com/Hackathon-Repo-Org/Shipping-Document-Verification-System-Averis_x_Monash_Hackathon.git backend
+cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-python -m shipdoc doctor
+pip install -e ".[dev,db,api]"
+
+# local settings: a SQLite file instead of PostgreSQL, and your own passcode
+$env:DATABASE_URL="sqlite:///output/shipdoc.db"
+$env:DEMO_PASSCODE="choose-any-passcode"
+$env:CORS_ORIGINS="http://localhost:5173"
+
+python -m shipdoc db seed      # load the 520 emails into the database
+python -m shipdoc              # run the verification engine on all of them
+python -m uvicorn shipdoc.adapters.api.app:app --port 8000
 ```
 
-`doctor` checks the install, the corpus, the config and a live sample run, then prints
-`RESULT: PASS`. Optional capabilities it cannot find (OCR, the LLM) are reported as
-`[--  ]` and are **expected to be missing** — the system runs without them and says
-what it lost.
+Leave this terminal open. Check it works by opening <http://localhost:8000/api/health>. You should see `"status":"ok"` and `"records":520`.
 
-Then:
+No API key is needed: the answers the AI gave for all 520 dataset emails are saved in the backend repository. More setup options (OCR for scanned PDFs, a local AI model, PostgreSQL) are in the backend's `SETUP.md`.
+
+### Step 2: start the frontend (second terminal)
 
 ```powershell
-python -m shipdoc                      # full run -> output\
-python -m shipdoc inspect email_013    # one record, seven fields, side by side
-python -m pytest -q                    # 776 tests
+git clone https://github.com/Hackathon-Repo-Org/Front-End-Shipping-Document-Verification-System-Averis_x_Monash_Hackathon_Version-1.0.git frontend
+cd frontend
+copy .env.example .env.local     # contains VITE_API_BASE_URL=http://localhost:8000
+npm install
+npm run dev
 ```
 
-## Why the model cache is committed
+Open <http://localhost:5173>. The dashboard should fill with numbers.
 
-`cache/llm/` holds this system's **own model outputs**, produced at temperature 0, from
-**both** providers — `cache/llm/MANIFEST.json` lists every model that has written
-there. Cache keys include the model name, so entries never collide and swapping
-providers re-queries rather than silently reusing the other model's answers.
-Committing it means a fresh clone reproduces the published score in seconds with no
-Ollama installed, and it is what makes runs byte-identical — temperature 0 alone does
-not guarantee that, because batching and GPU reduction order vary between calls.
+To sign in as a reviewer locally, use any name and the passcode you set in `DEMO_PASSCODE` in Step 1.
 
-**It is not the answer key and contains no gold labels.** Each filename is a
-`sha256(model + prompt_version + prompt + choices)` — irreversible, so no email text
-is stored — and each file's entire contents is one short string this system's own
-models produced: either one of the five category strings (the classifier), or one
-compared-field name, `NONE`, or a rejected free-text reply (the Phase 11 label
-proposer). Nothing in it is derived from the organisers' labels. The model name and
-prompt version are recorded in `cache/llm/MANIFEST.json`, and they are part of every
-cache key, so a cache built by a different model misses and re-queries rather than
-silently returning the wrong answers.
+### Available scripts
 
-Checkable rather than asserted — clear it and rebuild (needs Ollama and
-`qwen2.5:7b-instruct`, ~15 minutes):
-
-```powershell
-Remove-Item -Recurse -Force cache\llm
-python -m shipdoc                      # re-queries the model, rewrites the cache
-```
-
-## Documentation
-
-| File | For |
+| Command | What it does |
 |---|---|
-| **[SETUP.md](SETUP.md)** | Installing, in five tiers — laptop, OCR, LLM, database, Azure. Most people need only Tier 1. |
-| **[TESTING.md](TESTING.md)** | Testing and inspecting, in six levels, without needing to understand the system. |
-| **[HANDOVER.md](HANDOVER.md)** | Current state, what changed, what is known broken. |
-| **[docs/spec/](docs/spec/)** | The architecture specification and its patches. |
-| **[docs/reports/](docs/reports/)** | Corpus survey, scoring-rubric analysis. |
-| **[docs/decisions/](docs/decisions/)** | Why port resolution is off, and why projection rows 2 and 3 were kept — both measured. |
-| **[Dockerfile](Dockerfile)** | The deployable image. Batch job today; the same image becomes the API service later. No secrets in it. |
-| **[.env.example](.env.example)** | Every environment variable this system reads. Keys and connection strings come from the environment only. |
-| **[docs/deploy-azure.md](docs/deploy-azure.md)** | The exact Azure deploy sequence, and the post-deploy checklist. |
-| **[docs/design-notes.md](docs/design-notes.md)** | What the UI adopted from the team's prototype, and what it did not. |
-| **[ui/README.md](ui/README.md)** | The reviewer UI — screens, shortcuts, configuration. |
+| `npm run dev` | Starts the development server at <http://localhost:5173> with live reload |
+| `npm run typecheck` | Checks the TypeScript code for errors without building |
+| `npm run build` | Type-checks, then builds the production website into `dist/` |
+| `npm run preview` | Serves the built `dist/` folder at <http://localhost:4173> to check it before deploying |
 
-## Not built yet
+---
 
-No API and no web UI yet — everything is files on disk and a CLI.
-**Cloud and database are built**: a PostgreSQL adapter, Alembic migrations, blob
-storage for attachments and a verified container image, all optional and all off by
-default (SETUP.md tiers 4 and 5). `python -m shipdoc inspect` is the view a UI would wrap rather than replace.
+## Testing
 
-UN/LOCODE port-code resolution is built, tested and **switched off**: measured against
-the answer key it destroyed more real defect detections than it created, because this
-corpus writes port defects as a name/code contradiction. The reasoning and the fix
-direction are recorded; the flag is one boolean.
+### 1. Automatic checks (run before every push)
 
-A `BACKUP/` directory of superseded specifications and experiment output exists in the
-authors' working copy and is deliberately **not published** — nothing was deleted, it
-is simply not part of this repository.
+```powershell
+npm run typecheck
+npm run build
+```
+
+Both must finish with no errors. `npm run build` is exactly what the cloud server runs, so if it fails on your computer, the live site will not update either.
+
+### 2. Test the app by hand
+
+Do these on the live demo (<https://shipdoc.duckdns.org>) or on your local copy (<http://localhost:5173>).
+
+| # | What to do | What you should see |
+|---|---|---|
+| 1 | Open `/api/health` | `"status":"ok"`, `"database":true`, `"records":520` |
+| 2 | Open the Dashboard | Counts by status (OK, MISMATCH, NEEDS_REVIEW) and by category |
+| 3 | Inbox: filter by status **MISMATCH**, then copy the address and open it in a new tab | The same filtered list appears |
+| 4 | Open record `email_013` and click the BL **port of discharge** value | The source document opens with the matching line highlighted |
+| 5 | Open record `email_501` | Sent to review as **wrong document type**: the BL attachment is really a commercial invoice, so no comparison is made |
+| 6 | Open record `email_507` | Sent to review as **missing attachment**: only the SI was attached |
+| 7 | Open record `email_511` | Sent to review as **unreadable**: the PDF is damaged |
+| 8 | Review queue: sign in with your name and the passcode, open an item and **Confirm** it | The status changes at once, without reloading the page |
+| 9 | Repeat step 8 on a **phone in a private / incognito window** | Works the same. This is how judges usually open a link |
+| 10 | Evaluation page | The Qwen vs DeepSeek comparison table is shown |
+| 11 | Try it yourself: fill in or pick an example, then run it | A field-by-field result with MATCH, MISMATCH or CANNOT_DETERMINE for each field |
+
+### 3. Common problems
+
+| What you see | Likely cause | Fix |
+|---|---|---|
+| "This build has no API address" | `VITE_API_BASE_URL` was not set when building | Create `.env.local` from `.env.example`, then run `npm run dev` or `npm run build` again |
+| "Could not reach the API at ..." | The backend is not running, or the address is wrong | Start the backend (Step 1) and open `/api/health` to check it |
+| Pages load but Confirm or Approve fails | Wrong or missing passcode, or the backend's `CORS_ORIGINS` does not match the website address | Sign in again with the right passcode; set `CORS_ORIGINS` to the exact website address with no trailing `/` |
+| `npm run build` stops with `error TS...` | A TypeScript error in the code | Fix the file and line named in the error, then build again |
+
+---
+
+## Deployment (cloud)
+
+The live site runs on an AWS EC2 server. The server builds this repository with Node 20 and the live address, and Caddy serves the result:
+
+```bash
+cd /opt/shipdoc/frontend
+git pull
+sudo docker run --rm -v "$PWD":/app -w /app \
+  -e VITE_API_BASE_URL="https://shipdoc.duckdns.org" \
+  node:20 sh -c "npm ci && npm run build"
+```
+
+No restart is needed; the new files are served straight away. The full server setup (Docker Compose, Caddy, database) is in the backend repository under `deploy/aws/`.

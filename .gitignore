@@ -1,48 +1,17 @@
-# --- Answer-key containment -------------------------------------------------
-# The organiser's Docker bundle lives OUTSIDE this repo, as a sibling
-# (../sdoc-server/). These entries are a second layer: if it is ever copied in,
-# the gold labels must not reach a commit. Reading the scoring logic is
-# legitimate; reading the answers is not, and it is not recoverable.
-ground_truth*.json
-data_v2/
-sdoc-server/
-sdoc-hackathon-docker/
-
-# --- Superseded work: ON DISK, NOT PUBLISHED --------------------------------
-# BACKUP/ holds ~5,250 files of superseded specs, run artifacts and experiment
-# output. Nothing in it was deleted — it simply is not part of the published
-# repository. A fresh clone will NOT contain it; keep the local copy.
-BACKUP/
-
-# --- Run artifacts ----------------------------------------------------------
-# Regenerate with: python -m shipdoc
-output/
-output_*/
-data_*/
-eval/report.txt
-*.tmp
-
-# --- Python -----------------------------------------------------------------
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-venv/
-env/
-*.egg-info/
-build/
+# Dependencies and build output
+node_modules/
 dist/
 
-# --- Editors / OS -----------------------------------------------------------
+# Local settings (only .env.example is committed)
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# Secrets — never commit. See .env.example for the shape.
-.env
-.env.*
-!.env.example
-
-# Phase 14 — the demo database is a build artifact of a run, not source.
-output/shipdoc.db
+# The organisers' answer key must never be committed
+ground_truth*.json
