@@ -20,7 +20,11 @@ The system is deployed on **AWS** and ready to use. Nothing needs to be installe
 | API health check | <https://shipdoc.duckdns.org/api/health> |
 
 - **Reading is open to everyone.** Browse the dashboard, inbox, records and evaluation freely.
-- **Review actions need a passcode.** To confirm, correct or approve something, sign in with your name and the demo passcode given in our submission.
+- **Review actions need a passcode.** To confirm, correct or approve something, open **Reviewer** in the page header, type any name in **Your name**, enter the passcode below in **Demo passcode**, and click **Save**.
+
+```
+averis2026
+```
 
 The "Run locally" section below is only needed if you want to run your own copy.
 
@@ -194,7 +198,7 @@ Do these on the live demo (<https://shipdoc.duckdns.org>) or on your local copy 
 | 5 | Open record `email_501` | Sent to review as **wrong document type**: the BL attachment is really a commercial invoice, so no comparison is made |
 | 6 | Open record `email_507` | Sent to review as **missing attachment**: only the SI was attached |
 | 7 | Open record `email_511` | Sent to review as **unreadable**: the PDF is damaged |
-| 8 | Review queue: sign in with your name and the passcode, open an item and **Confirm** it | The status changes at once, without reloading the page |
+| 8 | Review queue: open **Reviewer**, enter any name and the passcode (`averis2026` on the live demo), then open an item and **Confirm** it | The status changes at once, without reloading the page |
 | 9 | Repeat step 8 on a **phone in a private / incognito window** | Works the same. This is how judges usually open a link |
 | 10 | Evaluation page | The Qwen vs DeepSeek comparison table is shown |
 | 11 | Try it yourself: fill in or pick an example, then run it | A field-by-field result with MATCH, MISMATCH or CANNOT_DETERMINE for each field |
